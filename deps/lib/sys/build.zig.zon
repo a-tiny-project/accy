@@ -1,0 +1,17 @@
+.{
+    .name = .sys,
+    .version = "26.6.2",
+    .fingerprint = 0x9e07ed22c6470306,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_observe_channel = .{ .path = "../alloc/observe/channel" },
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .build_api = .{ .path = "../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

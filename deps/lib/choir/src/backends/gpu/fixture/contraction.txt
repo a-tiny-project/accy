@@ -1,0 +1,26 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("contraction_vertex")} {
+      ^bb0:
+        %0, %1, %2 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %3 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.position(%0, %1, %2, %3)
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("contraction_fragment")} {
+      ^bb0:
+        %4 = gpu.push_constant() {offset = 0:i64} : !arith.f32
+        %5 = gpu.push_constant() {offset = 4:i64} : !arith.f32
+        %6 = gpu.push_constant() {offset = 8:i64} : !arith.f32
+        %7 = gpu.push_constant() {offset = 12:i64} : !arith.f32
+        %8 = gpu.push_constant() {offset = 16:i64} : !arith.f32
+        %9 = arith.mul(%4, %5) : !arith.f32
+        %10 = arith.add(%9, %6) : !arith.f32
+        %11 = arith.mul(%10, %7) : !arith.f32
+        %12 = arith.add(%11, %8) : !arith.f32
+        %13 = arith.constant() properties(0:f64) : !arith.f32
+        %14 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.stage_output(%12, %13, %13, %14) {location = 0:i64}
+        func.return()
+    }
+}

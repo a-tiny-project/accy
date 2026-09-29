@@ -1,0 +1,15 @@
+.{
+    .owner = "lib/bench",
+    .required = .{"bench.test"},
+    .recipes = .{.{
+        .id = "bench.test",
+        .step = "test",
+        .runtime = .{"sh"},
+        .suites = .{.{
+            .id = "bench-floor-tests",
+            .backend = "native",
+            .selection_artifact = "bench-floor-tests.selection.json",
+            .result_artifact = "bench-floor-tests.result.json",
+        }},
+    }},
+}

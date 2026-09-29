@@ -1,0 +1,27 @@
+const pass = @import("pass.zig");
+
+pub const fusion_plan_analysis_name = pass.fusion_plan_analysis_name;
+pub const fusion_planning_pass_name = pass.fusion_planning_pass_name;
+pub const fusion_planning_pass_description = pass.fusion_planning_pass_description;
+pub const ClaimKind = pass.ClaimKind;
+pub const ClaimMap = pass.ClaimMap;
+pub const FusionClusterKind = pass.FusionClusterKind;
+pub const FusionCluster = pass.FusionCluster;
+pub const FusionPlanAnalysis = pass.FusionPlanAnalysis;
+pub const fusion_plan_analysis_descriptor = pass.fusion_plan_analysis_descriptor;
+pub const getFusionPlanAnalysis = pass.getFusionPlanAnalysis;
+pub const fusionPlanningPass = pass.fusionPlanningPass;
+pub const isFlatGatherOp = pass.isFlatGatherOp;
+pub const regionsAreOpaque = pass.regionsAreOpaque;
+pub const isSeeThroughShapeOp = pass.isSeeThroughShapeOp;
+pub const flash_attention_dim = pass.flash_attention_dim;
+pub const flash_attention_min_seq = pass.flash_attention_min_seq;
+pub const row_pipeline_threads = pass.row_pipeline_threads;
+pub const max_row_pipeline_ops = pass.max_row_pipeline_ops;
+pub const max_row_pipeline_reduces = pass.max_row_pipeline_reduces;
+pub const max_row_pipeline_cols = pass.max_row_pipeline_cols;
+pub const max_dot_epilogue_ops = pass.max_dot_epilogue_ops;
+pub const max_reduction_prologue_ops = pass.max_reduction_prologue_ops;
+pub const max_concat_reduction_group = pass.max_concat_reduction_group;
+pub const broadcastLeafSource = pass.broadcastLeafSource;
+pub const isFusableElementwiseOp = pass.isFusableElementwiseOp;

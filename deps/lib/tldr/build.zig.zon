@@ -1,0 +1,20 @@
+.{
+    .name = .tldr,
+    .version = "26.6.2",
+    .fingerprint = 0x3b4e6420a06e7100,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../build/api" },
+        .alloc = .{ .path = "../alloc" },
+        .alloc_arena = .{ .path = "../alloc/arena" },
+        .coz = .{ .path = "../coz" },
+        .pretty = .{ .path = "../pretty" },
+        .sys = .{ .path = "../sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

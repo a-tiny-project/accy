@@ -1,0 +1,746 @@
+const std = @import("std");
+const ir = @import("../../core/root.zig");
+const position = @import("position.zig");
+
+pub fn Requirement(comptime Register: type) type {
+    return union(enum) {
+        any,
+        fixed: Register,
+    };
+}
+
+pub const Range = struct {
+    start: u32,
+    end: u32,
+    end_phase: position.Phase,
+};
+
+pub fn UsePosition(comptime Register: type, comptime Mask: type) type {
+    const RequirementType = Requirement(Register);
+
+    return struct {
+        point: position.Point,
+        requirement: RequirementType,
+        source_blockers: Mask,
+    };
+}
+
+pub fn DefinitionPosition(comptime Register: type) type {
+    const RequirementType = Requirement(Register);
+
+    return struct {
+        point: position.Point,
+        requirement: RequirementType,
+        source: RequirementType,
+    };
+}
+
+pub const FixedPositionKind = enum {
+    source,
+    use,
+    scratch_use,
+    def,
+    clobber,
+};
+
+pub fn FixedPosition(comptime Register: type) type {
+    return struct {
+        point: position.Point,
+        reg: Register,
+        kind: FixedPositionKind,
+    };
+}
+
+pub fn FixedPositionIndex(comptime Register: type) type {
+    const FixedPositionType = FixedPosition(Register);
+    const register_count = switch (@typeInfo(Register)) {
+        .@"enum" => |info| info.field_names.len,
+        .int => 0,
+        else => @compileError("register type must be an integer or enum"),
+    };
+
+    return struct {
+        positions: []const FixedPositionType,
+        register_spans: *const Storage,
+
+        const Self = @This();
+        pub const RegisterSpan = struct {
+            start: usize = 0,
+            end: usize = 0,
+        };
+        pub const Storage = [register_count]RegisterSpan;
+        const empty_register_spans = @as([register_count]RegisterSpan, @splat(.{}));
+
+        pub fn init(positions: []FixedPositionType, register_spans: *Storage) Self {
+            std.mem.sort(FixedPositionType, positions, {}, lessThan);
+            register_spans.* = @as([register_count]RegisterSpan, @splat(.{}));
+            if (comptime register_count != 0) {
+                for (positions, 0..) |fixed, index| {
+                    const span = &register_spans[registerIndex(fixed.reg)];
+                    if (span.end == 0) span.start = index;
+                    span.end = index + 1;
+                }
+            }
+            return .{ .positions = positions, .register_spans = register_spans };
+        }
+
+        pub fn empty() Self {
+            return .{ .positions = &.{}, .register_spans = &empty_register_spans };
+        }
+
+        pub fn between(self: Self, reg: Register, start: position.Point, end: position.Point) []const FixedPositionType {
+            if (comptime register_count != 0) {
+                const span = self.register_spans[registerIndex(reg)];
+                const register_positions = self.positions[span.start..span.end];
+                const first = pointLowerBound(register_positions, start.rank());
+                const last = pointLowerBound(register_positions, end.rank() + 1);
+                return register_positions[first..last];
+            }
+            const first = self.lowerBound(reg, start.rank());
+            const last = self.lowerBound(reg, end.rank() + 1);
+            return self.positions[first..last];
+        }
+
+        fn pointLowerBound(positions: []const FixedPositionType, rank: u64) usize {
+            var low: usize = 0;
+            var high = positions.len;
+            while (low < high) {
+                const middle = low + (high - low) / 2;
+                if (positions[middle].point.rank() < rank) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low;
+        }
+
+        fn lowerBound(self: Self, reg: Register, rank: u64) usize {
+            var low: usize = 0;
+            var high = self.positions.len;
+            while (low < high) {
+                const middle = low + (high - low) / 2;
+                const fixed = self.positions[middle];
+                const order = registerOrder(fixed.reg, reg);
+                if (order == .lt or (order == .eq and fixed.point.rank() < rank)) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low;
+        }
+
+        fn lessThan(_: void, lhs: FixedPositionType, rhs: FixedPositionType) bool {
+            const order = registerOrder(lhs.reg, rhs.reg);
+            if (order != .eq) return order == .lt;
+            if (lhs.point.rank() != rhs.point.rank()) return lhs.point.lessThan(rhs.point);
+            return @backingInt(lhs.kind) < @backingInt(rhs.kind);
+        }
+
+        fn registerIndex(reg: Register) usize {
+            const info = switch (@typeInfo(Register)) {
+                .@"enum" => |info| info,
+                else => unreachable,
+            };
+            inline for (info.field_values, 0..) |field_value, index| {
+                if (@backingInt(reg) == field_value) return index;
+            }
+            unreachable;
+        }
+
+        fn registerOrder(lhs: Register, rhs: Register) std.math.Order {
+            return switch (@typeInfo(Register)) {
+                .@"enum" => std.math.order(@backingInt(lhs), @backingInt(rhs)),
+                .int => std.math.order(lhs, rhs),
+                else => @compileError("register type must be an integer or enum"),
+            };
+        }
+    };
+}
+
+pub fn fixedPositionPoint(raw_position: u32, kind: FixedPositionKind) position.Point {
+    return switch (kind) {
+        .source, .use, .scratch_use => position.Point.source(raw_position),
+        .def, .clobber => position.Point.definition(raw_position),
+    };
+}
+
+pub fn Candidate(comptime Register: type, comptime Mask: type) type {
+    const RequirementType = Requirement(Register);
+    const UsePositionType = UsePosition(Register, Mask);
+    const DefinitionPositionType = DefinitionPosition(Register);
+    const FixedPositionType = FixedPosition(Register);
+
+    return struct {
+        value: *ir.Value,
+        range: Range,
+        use_positions: std.ArrayListUnmanaged(UsePositionType),
+        definition: DefinitionPositionType,
+        order: u32,
+        is_constant: bool,
+
+        const Self = @This();
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            self.use_positions.deinit(allocator);
+        }
+
+        pub fn start(self: Self) u32 {
+            return self.range.start;
+        }
+
+        pub fn startPoint(self: Self) position.Point {
+            return .{ .position = self.range.start, .phase = position.valueStartPhase(self.value) };
+        }
+
+        pub fn end(self: Self) u32 {
+            return self.range.end;
+        }
+
+        pub fn endPhase(self: Self) position.Phase {
+            return self.range.end_phase;
+        }
+
+        pub fn endPoint(self: Self) position.Point {
+            return .{ .position = self.end(), .phase = self.endPhase() };
+        }
+
+        pub fn locationRangeEnd(self: Self) u32 {
+            return self.end() + 1;
+        }
+
+        pub fn containsPoint(self: Self, point: position.Point) bool {
+            if (point.position < self.start() or point.position > self.end()) return false;
+            if (point.position == self.start() and @backingInt(point.phase) < @backingInt(position.valueStartPhase(self.value))) return false;
+            if (point.position == self.end() and @backingInt(point.phase) > @backingInt(self.endPhase())) return false;
+            return true;
+        }
+
+        pub fn requirementMatchesReg(requirement: RequirementType, reg: Register) bool {
+            return switch (requirement) {
+                .any => false,
+                .fixed => |fixed| fixed == reg,
+            };
+        }
+
+        pub fn ownsFixedPosition(self: Self, fixed: FixedPositionType) bool {
+            return switch (fixed.kind) {
+                .use => {
+                    if (self.definition.point.rank() == fixed.point.rank() and
+                        requirementMatchesReg(self.definition.requirement, fixed.reg)) return true;
+                    return self.ownsUsePosition(fixed.point, fixed.reg);
+                },
+                .scratch_use => self.ownsUsePosition(fixed.point, fixed.reg),
+                .source => self.definition.point.rank() == fixed.point.rank() and requirementMatchesReg(self.definition.source, fixed.reg),
+                .def => self.definition.point.rank() == fixed.point.rank() and requirementMatchesReg(self.definition.requirement, fixed.reg),
+                .clobber => self.definition.point.rank() == fixed.point.rank() and
+                    self.startPoint().rank() == fixed.point.rank() and
+                    requirementMatchesReg(self.definition.requirement, fixed.reg),
+            };
+        }
+
+        pub fn fixedPositionConflicts(self: Self, fixed: FixedPositionType, reg: Register) bool {
+            if (fixed.kind == .source or fixed.kind == .use) return false;
+            if (fixed.reg != reg) return false;
+            if (!self.containsPoint(fixed.point)) return false;
+            return !self.ownsFixedPosition(fixed);
+        }
+
+        pub fn conflictsWithFixedPositions(self: Self, fixed_positions: FixedPositionIndex(Register), reg: Register) bool {
+            for (fixed_positions.between(reg, self.startPoint(), self.endPoint())) |fixed| {
+                if (self.fixedPositionConflicts(fixed, reg)) return true;
+            }
+            return false;
+        }
+
+        pub fn useCount(self: Self) usize {
+            return self.use_positions.items.len;
+        }
+
+        pub fn usesAt(self: Self, point: position.Point) []const UsePositionType {
+            const first = self.useLowerBound(point.rank());
+            const last = self.useUpperBound(point.rank());
+            return self.use_positions.items[first..last];
+        }
+
+        pub fn usesBetween(self: Self, start_point: position.Point, end_point: position.Point) []const UsePositionType {
+            if (end_point.lessThan(start_point)) return self.use_positions.items[0..0];
+            const first = self.useLowerBound(start_point.rank());
+            const last = self.useUpperBound(end_point.rank());
+            return self.use_positions.items[first..last];
+        }
+
+        pub fn firstUse(self: Self) ?UsePositionType {
+            return if (self.use_positions.items.len == 0) null else self.use_positions.items[0];
+        }
+
+        pub fn firstUseAtOrAfter(self: Self, point: position.Point) ?UsePositionType {
+            const first = self.useLowerBound(point.rank());
+            return if (first == self.use_positions.items.len) null else self.use_positions.items[first];
+        }
+
+        pub fn recordUse(
+            self: *Self,
+            allocator: std.mem.Allocator,
+            point: position.Point,
+            requirement: RequirementType,
+            source_blockers: Mask,
+        ) !void {
+            const use = UsePositionType{
+                .point = point,
+                .requirement = requirement,
+                .source_blockers = source_blockers,
+            };
+            const len = self.use_positions.items.len;
+            if (len == 0 or self.use_positions.items[len - 1].point.rank() <= point.rank()) {
+                try self.use_positions.append(allocator, use);
+            } else {
+                try self.use_positions.insert(allocator, self.useUpperBound(point.rank()), use);
+            }
+            if (point.greaterThan(self.endPoint())) {
+                self.range.end = point.position;
+                self.range.end_phase = point.phase;
+            }
+        }
+
+        fn useLowerBound(self: Self, rank: u64) usize {
+            var low: usize = 0;
+            var high = self.use_positions.items.len;
+            while (low < high) {
+                const middle = low + (high - low) / 2;
+                if (self.use_positions.items[middle].point.rank() < rank) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low;
+        }
+
+        fn useUpperBound(self: Self, rank: u64) usize {
+            var low: usize = 0;
+            var high = self.use_positions.items.len;
+            while (low < high) {
+                const middle = low + (high - low) / 2;
+                if (self.use_positions.items[middle].point.rank() <= rank) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low;
+        }
+
+        fn ownsUsePosition(self: Self, point: position.Point, reg: Register) bool {
+            const rank = point.rank();
+            var index = self.useLowerBound(rank);
+            while (index < self.use_positions.items.len) : (index += 1) {
+                const use = self.use_positions.items[index];
+                if (use.point.rank() != rank) return false;
+                if (requirementMatchesReg(use.requirement, reg)) return true;
+            }
+            return false;
+        }
+
+        pub fn before(_: void, a: Self, b: Self) bool {
+            if (a.startPoint().rank() != b.startPoint().rank()) return a.startPoint().lessThan(b.startPoint());
+            if (a.endPoint().rank() != b.endPoint().rank()) return a.endPoint().lessThan(b.endPoint());
+            if (a.is_constant != b.is_constant) return !a.is_constant;
+            return a.order < b.order;
+        }
+    };
+}
+
+pub fn Candidates(comptime Register: type, comptime Mask: type) type {
+    const CandidateType = Candidate(Register, Mask);
+
+    return struct {
+        items: std.ArrayListUnmanaged(CandidateType) = .empty,
+        by_value: std.AutoHashMapUnmanaged(*ir.Value, usize) = .empty,
+
+        const Self = @This();
+
+        pub const empty: Self = .{};
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            for (self.items.items) |*candidate| candidate.deinit(allocator);
+            self.items.deinit(allocator);
+            self.by_value.deinit(allocator);
+        }
+
+        pub fn append(self: *Self, allocator: std.mem.Allocator, candidate: CandidateType) !void {
+            const candidate_index = self.items.items.len;
+            try self.items.append(allocator, candidate);
+            errdefer _ = self.items.pop();
+            try self.by_value.putNoClobber(allocator, candidate.value, candidate_index);
+        }
+
+        pub fn getPtr(self: *Self, value: *ir.Value) ?*CandidateType {
+            const candidate_index = self.by_value.get(value) orelse return null;
+            return &self.items.items[candidate_index];
+        }
+
+        pub fn sort(self: *Self) void {
+            std.mem.sort(CandidateType, self.items.items, {}, CandidateType.before);
+            for (self.items.items, 0..) |candidate, candidate_index| {
+                self.by_value.getPtr(candidate.value).?.* = candidate_index;
+            }
+        }
+
+        pub fn slice(self: *Self) []CandidateType {
+            return self.items.items;
+        }
+    };
+}
+
+pub fn Active(comptime Register: type) type {
+    return struct {
+        start: u32,
+        end: u32,
+        end_phase: position.Phase,
+        reg: Register,
+        candidate_index: usize,
+
+        const Self = @This();
+
+        pub fn endPoint(self: Self) position.Point {
+            return .{ .position = self.end, .phase = self.end_phase };
+        }
+    };
+}
+
+pub fn ActiveSet(comptime Register: type) type {
+    const ActiveType = Active(Register);
+
+    return struct {
+        items: std.ArrayListUnmanaged(ActiveType) = .empty,
+
+        const Self = @This();
+
+        pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
+            self.items.deinit(allocator);
+        }
+
+        pub fn append(self: *Self, allocator: std.mem.Allocator, active: ActiveType) !void {
+            try self.items.append(allocator, active);
+        }
+
+        pub fn containsRegister(self: Self, reg: Register) bool {
+            for (self.items.items) |entry| {
+                if (entry.reg == reg) return true;
+            }
+            return false;
+        }
+
+        pub fn slice(self: Self) []const ActiveType {
+            return self.items.items;
+        }
+
+        pub fn swapRemove(self: *Self, index: usize) ActiveType {
+            return self.items.swapRemove(index);
+        }
+
+        pub fn pop(self: *Self) ?ActiveType {
+            return self.items.pop();
+        }
+
+        pub fn takeExpiredBefore(self: *Self, point: position.Point) ?ActiveType {
+            var i: usize = 0;
+            while (i < self.items.items.len) {
+                if (self.items.items[i].endPoint().lessThan(point)) return self.items.swapRemove(i);
+                i += 1;
+            }
+            return null;
+        }
+    };
+}
+
+pub fn firstAvailableRegister(comptime Register: type, active: ActiveSet(Register), homes: []const Register, policy: anytype) ?Register {
+    for (homes) |reg| {
+        if (active.containsRegister(reg)) continue;
+        if (policy.blocksRegister(reg)) continue;
+        return reg;
+    }
+    return null;
+}
+
+pub fn AvailableRegister(comptime Register: type) type {
+    return struct {
+        reg: Register,
+        until: position.Point,
+    };
+}
+
+pub fn bestAvailableRegister(comptime Register: type, active: ActiveSet(Register), homes: []const Register, policy: anytype) ?AvailableRegister(Register) {
+    var best: ?AvailableRegister(Register) = null;
+    for (homes) |reg| {
+        if (active.containsRegister(reg)) continue;
+        const until = policy.availableUntil(reg) orelse continue;
+        if (best) |current| {
+            if (current.until.lessThan(until)) best = .{ .reg = reg, .until = until };
+        } else {
+            best = .{ .reg = reg, .until = until };
+        }
+    }
+    return best;
+}
+
+pub fn evictionCandidateIndex(
+    comptime Register: type,
+    comptime CandidateType: type,
+    active: []const Active(Register),
+    candidates: []const CandidateType,
+    policy: anytype,
+) ?usize {
+    var victim_index: ?usize = null;
+    for (active, 0..) |entry, index| {
+        if (policy.blocksRegister(entry.reg)) continue;
+        const victim = candidates[entry.candidate_index];
+        if (!policy.canEvict(victim)) continue;
+        if (victim_index) |current_index| {
+            const current = candidates[active[current_index].candidate_index];
+            if (policy.prefersVictim(victim, current)) victim_index = index;
+        } else {
+            victim_index = index;
+        }
+    }
+    return victim_index;
+}
+
+test "fixed position kinds map to source and definition phases" {
+    try std.testing.expectEqual(position.Phase.source, fixedPositionPoint(3, .use).phase);
+    try std.testing.expectEqual(position.Phase.source, fixedPositionPoint(3, .scratch_use).phase);
+    try std.testing.expectEqual(position.Phase.definition, fixedPositionPoint(3, .def).phase);
+    try std.testing.expectEqual(position.Phase.definition, fixedPositionPoint(3, .clobber).phase);
+}
+
+test "candidate collection preserves order and indexes values" {
+    var owner: u8 = 0;
+    var first = ir.Value{
+        .kind = .{ .op_result = .{ .owner = &owner, .result_number = 0 } },
+        .type = undefined,
+        .id = 0,
+    };
+    var second = ir.Value{
+        .kind = .{ .op_result = .{ .owner = &owner, .result_number = 1 } },
+        .type = undefined,
+        .id = 1,
+    };
+    var missing = ir.Value{
+        .kind = .{ .op_result = .{ .owner = &owner, .result_number = 2 } },
+        .type = undefined,
+        .id = 2,
+    };
+
+    const Collection = Candidates(u8, u8);
+    var candidates: Collection = .empty;
+    defer candidates.deinit(std.testing.allocator);
+
+    try candidates.append(std.testing.allocator, .{
+        .value = &first,
+        .range = .{ .start = 1, .end = 1, .end_phase = .definition },
+        .use_positions = .empty,
+        .definition = .{ .point = position.Point.definition(1), .requirement = .any, .source = .any },
+        .order = 0,
+        .is_constant = false,
+    });
+    try candidates.append(std.testing.allocator, .{
+        .value = &second,
+        .range = .{ .start = 2, .end = 2, .end_phase = .definition },
+        .use_positions = .empty,
+        .definition = .{ .point = position.Point.definition(2), .requirement = .any, .source = .any },
+        .order = 1,
+        .is_constant = false,
+    });
+
+    const indexed = candidates.getPtr(&second) orelse return error.TestFailure;
+    try indexed.recordUse(std.testing.allocator, position.Point.source(5), .any, 0);
+
+    try std.testing.expectEqual(&first, candidates.slice()[0].value);
+    try std.testing.expectEqual(&second, candidates.slice()[1].value);
+    try std.testing.expectEqual(@as(u32, 5), candidates.slice()[1].end());
+    try std.testing.expectEqual(@as(?*Candidate(u8, u8), null), candidates.getPtr(&missing));
+}
+
+test "candidate fixed position ownership is requirement based" {
+    var owner: u8 = 0;
+    var value = ir.Value{
+        .kind = .{ .op_result = .{ .owner = &owner, .result_number = 0 } },
+        .type = undefined,
+        .id = 0,
+    };
+
+    const CandidateType = Candidate(u8, u8);
+    const UsePositionType = UsePosition(u8, u8);
+    const FixedPositionType = FixedPosition(u8);
+    var uses: std.ArrayListUnmanaged(UsePositionType) = .empty;
+    defer uses.deinit(std.testing.allocator);
+    try uses.append(std.testing.allocator, .{
+        .point = position.Point.definition(3),
+        .requirement = .any,
+        .source_blockers = 0,
+    });
+    try uses.append(std.testing.allocator, .{
+        .point = position.Point.source(4),
+        .requirement = .{ .fixed = 2 },
+        .source_blockers = 0,
+    });
+
+    const candidate = CandidateType{
+        .value = &value,
+        .range = .{ .start = 3, .end = 4, .end_phase = .source },
+        .use_positions = uses,
+        .definition = .{
+            .point = position.Point.definition(3),
+            .requirement = .{ .fixed = 1 },
+            .source = .any,
+        },
+        .order = 0,
+        .is_constant = false,
+    };
+    const def_fixed = FixedPositionType{ .point = position.Point.definition(3), .reg = 1, .kind = .def };
+    const scratch_fixed = FixedPositionType{ .point = position.Point.source(4), .reg = 2, .kind = .scratch_use };
+    const clobber = FixedPositionType{ .point = position.Point.definition(3), .reg = 2, .kind = .clobber };
+    var fixed_positions = [_]FixedPositionType{ def_fixed, scratch_fixed, clobber };
+    var fixed_position_index_storage: FixedPositionIndex(u8).Storage = undefined;
+    const fixed_position_index = FixedPositionIndex(u8).init(&fixed_positions, &fixed_position_index_storage);
+
+    try std.testing.expect(candidate.ownsFixedPosition(def_fixed));
+    try std.testing.expect(candidate.ownsFixedPosition(scratch_fixed));
+    try std.testing.expect(candidate.fixedPositionConflicts(clobber, 2));
+    try std.testing.expect(!candidate.fixedPositionConflicts(def_fixed, 1));
+    try std.testing.expect(candidate.conflictsWithFixedPositions(fixed_position_index, 2));
+    try std.testing.expect(!candidate.conflictsWithFixedPositions(fixed_position_index, 1));
+
+    const first_use = candidate.firstUse() orelse return error.TestFailure;
+    try std.testing.expectEqual(position.Point.definition(3), first_use.point);
+    const same_point_use = candidate.firstUseAtOrAfter(position.Point.definition(3)) orelse return error.TestFailure;
+    try std.testing.expectEqual(position.Point.definition(3), same_point_use.point);
+    const later_use = candidate.firstUseAtOrAfter(position.Point.source(4)) orelse return error.TestFailure;
+    try std.testing.expectEqual(position.Point.source(4), later_use.point);
+    try std.testing.expectEqual(@as(?UsePositionType, null), candidate.firstUseAtOrAfter(position.Point.definition(4)));
+}
+
+test "active set tracks registers and expires by point phase" {
+    const Set = ActiveSet(u8);
+
+    var active = Set{};
+    defer active.deinit(std.testing.allocator);
+
+    try active.append(std.testing.allocator, .{
+        .start = 0,
+        .end = 4,
+        .end_phase = .source,
+        .reg = 1,
+        .candidate_index = 0,
+    });
+    try active.append(std.testing.allocator, .{
+        .start = 1,
+        .end = 4,
+        .end_phase = .definition,
+        .reg = 2,
+        .candidate_index = 1,
+    });
+
+    try std.testing.expect(active.containsRegister(1));
+    try std.testing.expect(active.containsRegister(2));
+    try std.testing.expect(!active.containsRegister(3));
+
+    try std.testing.expectEqual(@as(?Active(u8), null), active.takeExpiredBefore(position.Point.source(4)));
+
+    const expired = active.takeExpiredBefore(position.Point.definition(4)) orelse return error.TestFailure;
+    try std.testing.expectEqual(@as(u8, 1), expired.reg);
+    try std.testing.expect(!active.containsRegister(1));
+    try std.testing.expect(active.containsRegister(2));
+
+    const remaining = active.pop() orelse return error.TestFailure;
+    try std.testing.expectEqual(@as(u8, 2), remaining.reg);
+    try std.testing.expectEqual(@as(?Active(u8), null), active.pop());
+}
+
+test "register selection scans homes and eviction candidates through policy" {
+    const Set = ActiveSet(u8);
+
+    var active = Set{};
+    defer active.deinit(std.testing.allocator);
+
+    try active.append(std.testing.allocator, .{
+        .start = 0,
+        .end = 8,
+        .end_phase = .definition,
+        .reg = 1,
+        .candidate_index = 0,
+    });
+    try active.append(std.testing.allocator, .{
+        .start = 0,
+        .end = 8,
+        .end_phase = .definition,
+        .reg = 2,
+        .candidate_index = 1,
+    });
+    try active.append(std.testing.allocator, .{
+        .start = 0,
+        .end = 8,
+        .end_phase = .definition,
+        .reg = 3,
+        .candidate_index = 2,
+    });
+
+    const Policy = struct {
+        blocked: u8,
+        incoming_priority: u8,
+
+        fn blocksRegister(self: @This(), reg: u8) bool {
+            return self.blocked == reg;
+        }
+
+        fn canEvict(self: @This(), victim_priority: u8) bool {
+            return self.incoming_priority > victim_priority;
+        }
+
+        fn prefersVictim(_: @This(), victim_priority: u8, current_priority: u8) bool {
+            return victim_priority < current_priority;
+        }
+    };
+
+    const homes = [_]u8{ 1, 2, 3, 4 };
+    const candidates = [_]u8{ 5, 2, 8 };
+
+    try std.testing.expectEqual(@as(?u8, 4), firstAvailableRegister(u8, active, &homes, Policy{ .blocked = 2, .incoming_priority = 6 }));
+    try std.testing.expectEqual(@as(?usize, 0), evictionCandidateIndex(u8, u8, active.slice(), &candidates, Policy{ .blocked = 2, .incoming_priority = 6 }));
+    try std.testing.expectEqual(@as(?usize, 1), evictionCandidateIndex(u8, u8, active.slice(), &candidates, Policy{ .blocked = 0, .incoming_priority = 6 }));
+}
+
+test "best available register chooses farthest available point" {
+    const Set = ActiveSet(u8);
+
+    var active = Set{};
+    defer active.deinit(std.testing.allocator);
+
+    try active.append(std.testing.allocator, .{
+        .start = 0,
+        .end = 8,
+        .end_phase = .definition,
+        .reg = 1,
+        .candidate_index = 0,
+    });
+
+    const Policy = struct {
+        fn availableUntil(_: @This(), reg: u8) ?position.Point {
+            return switch (reg) {
+                2 => null,
+                3 => position.Point.source(5),
+                4 => position.Point.definition(5),
+                5 => position.Point.source(9),
+                else => position.Point.source(1),
+            };
+        }
+    };
+
+    const homes = [_]u8{ 1, 2, 3, 4, 5 };
+    const choice = bestAvailableRegister(u8, active, &homes, Policy{}) orelse return error.TestFailure;
+
+    try std.testing.expectEqual(@as(u8, 5), choice.reg);
+    try std.testing.expectEqual(position.Point.source(9), choice.until);
+}

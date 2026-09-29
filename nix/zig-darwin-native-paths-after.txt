@@ -1,0 +1,20 @@
+        if ((resolved_target.is_native_os and target.os.tag.isDarwin()) or
+            (native_os.isDarwin() and target.os.tag == native_os)) {
+            // If we want to link against frameworks, we need system headers.
+            if (create_module.frameworks.count() > 0)
+                create_module.want_native_include_dirs = true;
+        }
+
+        if (create_module.each_lib_rpath orelse resolved_target.is_native_os) {
+            try create_module.rpath_list.ensureUnusedCapacity(arena, create_module.lib_directories.items.len);
+            for (create_module.lib_directories.items) |lib_directory| {
+                create_module.rpath_list.appendAssumeCapacity(lib_directory.path.?);
+            }
+        }
+
+        // Trigger native system library path detection if necessary.
+        if (create_module.sysroot == null and
+            ((resolved_target.is_native_os and resolved_target.is_native_abi) or
+                (native_os.isDarwin() and target.os.tag == native_os)) and
+            create_module.want_native_include_dirs)
+        {

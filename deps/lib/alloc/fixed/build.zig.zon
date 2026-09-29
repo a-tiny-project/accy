@@ -1,0 +1,16 @@
+.{
+    .name = .alloc_fixed,
+    .version = "26.7.0",
+    .fingerprint = 0x9df70938b420b59c,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_observe = .{ .path = "../observe" },
+        .build_api = .{ .path = "../../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

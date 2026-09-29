@@ -1,0 +1,21 @@
+.{
+    .name = .alloc_phase,
+    .version = "26.7.0",
+    .fingerprint = 0xb28311c1cd0cd606,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src/allocator.zig",
+        "src/capacity",
+        "src/input",
+        "src/observer/silent.zig",
+        "src/properties",
+        "src/root.zig",
+        "src/test.zig",
+    },
+}

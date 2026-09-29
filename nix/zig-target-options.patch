@@ -1,0 +1,58 @@
+diff --git a/lib/std/Build.zig b/lib/std/Build.zig
+index 047d5da1a..cf63e8751 100644
+--- a/lib/std/Build.zig
++++ b/lib/std/Build.zig
+@@ -430,6 +430,20 @@ fn addUserInputOptionFromArg(
+                 .value = .{ .scalar = v.serializeCpuAlloc(arena) catch @panic("OOM") },
+                 .used = false,
+             }) catch @panic("OOM");
++            if (v.ofmt) |ofmt| {
++                map.put("ofmt", .{
++                    .name = "ofmt",
++                    .value = .{ .scalar = @tagName(ofmt) },
++                    .used = false,
++                }) catch @panic("OOM");
++            }
++            if (v.dynamic_linker) |dynamic_linker| {
++                map.put("dynamic-linker", .{
++                    .name = "dynamic-linker",
++                    .value = .{ .scalar = arena.dupe(u8, dynamic_linker.get() orelse "") catch @panic("OOM") },
++                    .used = false,
++                }) catch @panic("OOM");
++            }
+         },
+         ResolvedTarget => return if (maybe_value) |v| {
+             map.put(field_name, .{
+@@ -442,6 +456,20 @@ fn addUserInputOptionFromArg(
+                 .value = .{ .scalar = v.query.serializeCpuAlloc(arena) catch @panic("OOM") },
+                 .used = false,
+             }) catch @panic("OOM");
++            if (v.query.ofmt) |ofmt| {
++                map.put("ofmt", .{
++                    .name = "ofmt",
++                    .value = .{ .scalar = @tagName(ofmt) },
++                    .used = false,
++                }) catch @panic("OOM");
++            }
++            if (v.query.dynamic_linker) |dynamic_linker| {
++                map.put("dynamic-linker", .{
++                    .name = "dynamic-linker",
++                    .value = .{ .scalar = arena.dupe(u8, dynamic_linker.get() orelse "") catch @panic("OOM") },
++                    .used = false,
++                }) catch @panic("OOM");
++            }
+         },
+         std.zig.BuildId => return if (maybe_value) |v| {
+             map.put(field_name, .{
+diff --git a/lib/compiler/Maker/Step/Compile.zig b/lib/compiler/Maker/Step/Compile.zig
+--- a/lib/compiler/Maker/Step/Compile.zig
++++ b/lib/compiler/Maker/Step/Compile.zig
+@@ -2058,7 +2058,7 @@ fn appendModuleFlags(
+             if (query.dynamic_linker) |*dynamic_linker| {
+                 if (dynamic_linker.get()) |dynamic_linker_path| {
+                     zig_args.appendAssumeCapacity("--dynamic-linker");
+-                    zig_args.appendAssumeCapacity(dynamic_linker_path);
++                    zig_args.appendAssumeCapacity(try arena.dupe(u8, dynamic_linker_path));
+                 } else {
+                     zig_args.appendAssumeCapacity("--no-dynamic-linker");
+                 }

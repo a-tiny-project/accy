@@ -1,0 +1,16 @@
+.{
+    .name = .pretty_core,
+    .version = "26.8.0",
+    .fingerprint = 0x9d774743885dea3a,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../../alloc/phase" },
+        .build_api = .{ .path = "../../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

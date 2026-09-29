@@ -1,0 +1,34 @@
+const link = @import("link.zig");
+const metadata = @import("metadata.zig");
+
+pub const addressing = @import("address/root.zig");
+pub const diagnostic = @import("diagnostic.zig");
+pub const ehframe = @import("ehframe/root.zig");
+pub const format = @import("format.zig");
+pub const got_table = @import("got.zig");
+pub const ifunc = @import("ifunc.zig");
+pub const group = @import("group/root.zig");
+pub const icf = @import("icf/root.zig");
+pub const image = @import("image/root.zig");
+pub const layout = @import("layout/root.zig");
+pub const liveness = @import("liveness/root.zig");
+pub const merge = @import("merge/root.zig");
+pub const note = @import("note.zig");
+pub const object = @import("object/root.zig");
+pub const payload = @import("payload.zig");
+pub const program = @import("program.zig");
+pub const parser = @import("parser.zig");
+pub const relink = @import("relink.zig");
+pub const output_section = @import("section.zig");
+pub const relocation = @import("relocation/root.zig");
+pub const section_state = @import("sections.zig");
+pub const string = @import("string.zig");
+pub const symbol_table = @import("symbol.zig");
+pub const view = @import("view.zig");
+
+pub const parseObjectMetadata = parser.parseObjectMetadata;
+pub const linkExecutable = link.linkExecutable;
+pub const patchIncrementalMetadata = metadata.patchIncrementalMetadata;
+pub const finishIncrementalMetadata = metadata.finishIncrementalMetadata;
+pub const buildIdNoteRange = metadata.buildIdNoteRange;
+pub const patchIncrementalMetadataRange = metadata.patchIncrementalMetadataRange;

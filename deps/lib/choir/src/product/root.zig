@@ -1,0 +1,49 @@
+pub const hashing = @import("hashing/root.zig");
+pub const incremental = @import("incremental.zig");
+pub const entity = @import("entity.zig");
+pub const operation = @import("operation.zig");
+
+pub const StableHasher = hashing.StableHasher;
+pub const StableValueNumbering = hashing.StableValueNumbering;
+pub const OperationFingerprintError = hashing.OperationFingerprintError;
+pub const operationFingerprint = hashing.operationFingerprint;
+
+pub const EntityNamespace = revision.record.Namespace;
+pub const EntityRef = revision.store.Entity;
+pub const EntityImage = entity.Image;
+pub const OperationProduct = operation.Product;
+pub const OperationJob = operation.Job;
+pub const OperationConfiguration = operation.Configuration;
+
+pub const Fingerprint = incremental.Fingerprint;
+pub const FingerprintBuilder = incremental.FingerprintBuilder;
+pub const ProductStamp = incremental.ProductStamp;
+pub const ProductRef = incremental.ProductRef;
+pub const ProductKey = incremental.ProductKey;
+pub const ProductDependency = incremental.ProductDependency;
+pub const ProductRefreshReason = incremental.ProductRefreshReason;
+pub const ProductMaterialization = incremental.ProductMaterialization;
+pub const ProductDependencyChange = incremental.ProductDependencyChange;
+pub const ProductRefreshDecision = incremental.ProductRefreshDecision;
+pub const ProductMetadataError = incremental.ProductMetadataError;
+pub const ProductRefreshPlan = incremental.ProductRefreshPlan;
+pub const ProductGraph = incremental.ProductGraph;
+pub const ProductGraphBuilderError = incremental.ProductGraphBuilderError;
+pub const ProductGraphBuilder = incremental.ProductGraphBuilder;
+pub const ProductRefreshReport = incremental.ProductRefreshReport;
+pub const productStamp = incremental.productStamp;
+pub const productRef = incremental.productRef;
+pub const cloneProductRef = incremental.cloneProductRef;
+pub const deinitProductRef = incremental.deinitProductRef;
+pub const productKey = incremental.productKey;
+pub const cloneProductKey = incremental.cloneProductKey;
+pub const deinitProductKey = incremental.deinitProductKey;
+pub const productDependency = incremental.productDependency;
+pub const derivedProductStamp = incremental.derivedProductStamp;
+pub const productRefsContain = incremental.productRefsContain;
+pub const fingerprintBytes = incremental.fingerprintBytes;
+
+pub const ProductMetadataStorage = @import("storage.zig").Storage;
+pub const revision = @import("revision/root.zig");
+pub const recipe = @import("recipe.zig");
+pub const compiler = @import("compiler.zig");

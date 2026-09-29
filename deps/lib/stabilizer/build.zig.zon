@@ -1,0 +1,17 @@
+.{
+    .name = .stabilizer,
+    .version = "26.6.2",
+    .fingerprint = 0x992327fe45da45f1,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../build/api" },
+        .hypothesis = .{ .path = "../hypothesis" },
+        .sys = .{ .path = "../sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

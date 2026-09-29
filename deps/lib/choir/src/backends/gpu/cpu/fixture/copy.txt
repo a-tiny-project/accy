@@ -1,0 +1,10 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_copy")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>):
+        %2 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %3 = memref.load(%0, %2) : !arith.f32
+        memref.store(%3, %1, %2)
+        func.return()
+    }
+}

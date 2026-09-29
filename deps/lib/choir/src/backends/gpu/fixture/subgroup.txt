@@ -1,0 +1,15 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_subgroup")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>):
+        %2 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %3 = memref.load(%1, %2) : !arith.f32
+        %4 = arith.constant() properties(-1:i64) : !arith.i32
+        %5 = gpu.warp_scan(%4, %3) {inclusive = false, op = #attr<gpu.warp_op>("add")} : !arith.f32
+        %6 = arith.constant() properties(-1:i64) : !arith.i32
+        %7 = gpu.warp_reduce(%6, %3) {op = #attr<gpu.warp_op>("add")} : !arith.f32
+        %8 = arith.add(%5, %7) : !arith.f32
+        memref.store(%8, %0, %2)
+        func.return()
+    }
+}

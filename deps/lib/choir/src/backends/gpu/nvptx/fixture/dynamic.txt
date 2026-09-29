@@ -1,0 +1,19 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_dynamic")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>):
+        %2 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %3 = gpu.lane_id() : !arith.index
+        %4 = arith.constant() properties(4:i64) : !arith.index
+        %5 = memref.alloc(%4) {gpu.dynamic_shared_byte_offset = 0:i64} : !memref<4,arith.f32,shared>
+        %6 = arith.constant() properties(4:i64) : !arith.index
+        %7 = memref.alloc(%6) {gpu.dynamic_shared_byte_offset = 64:i64} : !memref<4,arith.f32,shared>
+        %8 = memref.load(%1, %2) : !arith.f32
+        memref.store(%8, %5, %3)
+        memref.store(%8, %7, %3)
+        gpu.barrier() {scope = #attr<gpu.scope>("block")}
+        %9 = memref.load(%7, %3) : !arith.f32
+        memref.store(%9, %0, %2)
+        func.return()
+    }
+}

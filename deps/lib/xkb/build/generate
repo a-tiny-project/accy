@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+
+import argparse
+import hashlib
+import json
+import re
+from collections import defaultdict
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA = ROOT / "data"
+GENERATED = ROOT / "src" / "keysym" / "generated"
+UNICODE_OFFSET = 0x01000000
+UNICODE_MIN = 0x01000100
+UNICODE_MAX = 0x0110FFFF
+
+
+def source_metadata():
+    return json.loads((DATA / "source.json").read_text(encoding="utf-8"))
+
+
+def verify_sources(metadata):
+    for name, expected in metadata["files"].items():
+        actual = hashlib.sha256((DATA / name).read_bytes()).hexdigest()
+        if actual != expected["sha256"]:
+            raise ValueError(f"source hash mismatch: {name}: {actual}")
+
+
+def parse_names():
+    source = (DATA / "keysyms.h").read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"^#define\s+XKB_KEY_(\w+)\s+(0x[0-9A-Fa-f]+)\b", re.MULTILINE
+    )
+    entries = [(match.group(1), int(match.group(2), 16)) for match in pattern.finditer(source)]
+    if len({name for name, _ in entries}) != len(entries):
+        raise ValueError("duplicate keysym name")
+    return entries
+
+
+def parse_keysyms():
+    records = []
+    current = None
+    entry_pattern = re.compile(r"^(0x[0-9A-Fa-f]+):$")
+    field_pattern = re.compile(r"^  (name|code point|upper|lower):\s+([^\s#]+)")
+    for line in (DATA / "keysyms.yaml").read_text(encoding="utf-8").splitlines():
+        if match := entry_pattern.match(line):
+            if current is not None:
+                records.append(current)
+            current = {"keysym": int(match.group(1), 16)}
+        elif current is not None and (match := field_pattern.match(line)):
+            field, value = match.groups()
+            current[field] = value if field == "name" else int(value, 16)
+    if current is not None:
+        records.append(current)
+    if any("name" not in record for record in records):
+        raise ValueError("keysym record without a name")
+    return records
+
+
+def cross_check(names, records, expected):
+    by_name = dict(names)
+    by_value = defaultdict(list)
+    for name, value in names:
+        by_value[value].append(name)
+    values = {record["keysym"] for record in records}
+    if len(values) != len(records):
+        raise ValueError("duplicate semantic keysym value")
+    if values != set(by_value):
+        raise ValueError("keysym header and semantic data disagree")
+    for record in records:
+        if by_name.get(record["name"]) != record["keysym"]:
+            raise ValueError(f"canonical keysym mismatch: {record['name']}")
+    counts = {
+        "names": len(names),
+        "keysyms": len(records),
+        "unicode": sum("code point" in record for record in records),
+    }
+    for name, count in counts.items():
+        if count != expected[name]:
+            raise ValueError(f"unexpected {name} count: {count}")
+    cross_check_unicode(by_name, records, expected)
+
+
+def cross_check_unicode(keysyms, records, expected):
+    source = (DATA / "unicode.c").read_text(encoding="utf-8")
+    match = re.search(
+        r"static const struct codepair keysymtab\[\] = \{(.*?)\n\};",
+        source,
+        re.DOTALL,
+    )
+    if match is None:
+        raise ValueError("missing legacy Unicode table")
+    pattern = re.compile(
+        r"\{\s*(0x[0-9A-Fa-f]+),\s*(?:true|false),\s*(0x[0-9A-Fa-f]+)\s*\}"
+    )
+    legacy = {int(keysym, 16): int(codepoint, 16) for keysym, codepoint in pattern.findall(match.group(1))}
+    if len(legacy) != expected["legacy_unicode"]:
+        raise ValueError(f"unexpected legacy Unicode count: {len(legacy)}")
+
+    def reference(keysym):
+        if 0x20 <= keysym <= 0x7E or 0xA0 <= keysym <= 0xFF:
+            return keysym
+        if keysym == keysyms["KP_Space"]:
+            return keysyms["space"] & 0x7F
+        if (
+            keysyms["BackSpace"] <= keysym <= keysyms["Clear"]
+            or keysyms["KP_Multiply"] <= keysym <= keysyms["KP_9"]
+            or keysym
+            in {
+                keysyms["Return"],
+                keysyms["Escape"],
+                keysyms["Delete"],
+                keysyms["KP_Tab"],
+                keysyms["KP_Enter"],
+                keysyms["KP_Equal"],
+            }
+        ):
+            return keysym & 0x7F
+        if UNICODE_OFFSET + 0xD800 <= keysym <= UNICODE_OFFSET + 0xDFFF:
+            return None
+        if UNICODE_OFFSET <= keysym <= UNICODE_MAX:
+            return keysym - UNICODE_OFFSET
+        if keysyms["XF86Numeric0"] <= keysym <= keysyms["XF86Numeric9"]:
+            return keysym - keysyms["XF86Numeric0"] + 0x30
+        if keysym == keysyms["XF86NumericStar"]:
+            return 0x2A
+        if keysym == keysyms["XF86NumericPound"]:
+            return 0x23
+        return legacy.get(keysym)
+
+    for record in records:
+        expected_codepoint = record.get("code point")
+        actual_codepoint = reference(record["keysym"])
+        if actual_codepoint != expected_codepoint:
+            raise ValueError(
+                f"Unicode mapping mismatch: {record['name']}: "
+                f"semantic={expected_codepoint} reference={actual_codepoint}"
+            )
+
+
+def classification_data(keysyms):
+    source = (DATA / "class.c").read_text(encoding="utf-8")
+    required = (
+        "keysym >= XKB_KEY_KP_Space && keysym <= XKB_KEY_KP_Equal",
+        "keysym >= XKB_KEY_Shift_L && keysym <= XKB_KEY_Hyper_R",
+        "keysym >= XKB_KEY_ISO_Lock && keysym <= XKB_KEY_ISO_Level5_Lock",
+        "keysym == XKB_KEY_Mode_switch",
+        "keysym == XKB_KEY_Num_Lock",
+    )
+    if any(fragment not in source for fragment in required):
+        raise ValueError("keysym classification changed upstream")
+    return {
+        "keypad_min": keysyms["KP_Space"],
+        "keypad_max": keysyms["KP_Equal"],
+        "modifier_core_min": keysyms["Shift_L"],
+        "modifier_core_max": keysyms["Hyper_R"],
+        "modifier_iso_min": keysyms["ISO_Lock"],
+        "modifier_iso_max": keysyms["ISO_Level5_Lock"],
+        "mode_switch": keysyms["Mode_switch"],
+        "num_lock": keysyms["Num_Lock"],
+    }
+
+
+def array_body(source, name):
+    pattern = re.compile(
+        rf"static const [^\n]+\b{re.escape(name)}\[[0-9]+\] = \{{(.*?)\n\}};",
+        re.DOTALL,
+    )
+    match = pattern.search(source)
+    if match is None:
+        raise ValueError(f"missing case array: {name}")
+    return match.group(1)
+
+
+def integer_array(source, name):
+    pattern = re.compile(r"(?<![\w])-?0x[0-9A-Fa-f]+|(?<![\w])-?[0-9]+")
+    return [int(token, 0) for token in pattern.findall(array_body(source, name))]
+
+
+def mapping_array(source, name):
+    pattern = re.compile(
+        r"\{\s*([01])\s*,\s*([01])\s*,\s*(-?0x[0-9A-Fa-f]+)\s*\}"
+    )
+    return [
+        (int(lower), int(upper), int(offset, 0))
+        for lower, upper, offset in pattern.findall(array_body(source, name))
+    ]
+
+
+def parse_cases(expected):
+    source = (DATA / "case.c").read_text(encoding="utf-8")
+    required = (
+        "if (ks <= 0x13be)",
+        "XKB_KEYSYM_UNICODE_MIN <= ks && ks <= 0x0101f189",
+        "legacy_keysym_offsets2[ks >> 7] + ((ks >> 1) & 0x3f)",
+        "unicode_offsets2[ks >> 8] + ((ks >> 3) & 0x1f)",
+    )
+    if any(fragment not in source for fragment in required):
+        raise ValueError("case mapping layout changed upstream")
+
+    legacy_data = mapping_array(source, "legacy_keysym_data")
+    legacy_offsets1 = integer_array(source, "legacy_keysym_offsets1")
+    legacy_offsets2 = integer_array(source, "legacy_keysym_offsets2")
+    unicode_data = mapping_array(source, "unicode_data")
+    unicode_offsets1 = integer_array(source, "unicode_offsets1")
+    unicode_offsets2 = integer_array(source, "unicode_offsets2")
+
+    if tuple(map(len, (legacy_data, legacy_offsets1, legacy_offsets2))) != (47, 540, 40):
+        raise ValueError("legacy case array dimensions changed upstream")
+    if tuple(map(len, (unicode_data, unicode_offsets1, unicode_offsets2))) != (1019, 908, 498):
+        raise ValueError("Unicode case array dimensions changed upstream")
+
+    def legacy_entry(keysym):
+        index2 = legacy_offsets2[keysym >> 7]
+        index1 = legacy_offsets1[index2 + ((keysym >> 1) & 0x3F)]
+        return legacy_data[index1 + (keysym & 0x01)]
+
+    def unicode_entry(codepoint):
+        index2 = unicode_offsets2[codepoint >> 8]
+        index1 = unicode_offsets1[index2 + ((codepoint >> 3) & 0x1F)]
+        return unicode_data[index1 + (codepoint & 0x07)]
+
+    lower = []
+    upper = []
+    for keysym in range(0x13BF):
+        has_lower, has_upper, offset = legacy_entry(keysym)
+        if has_lower:
+            lower.append((keysym, keysym + offset))
+        if has_upper:
+            upper.append((keysym, keysym - offset))
+
+    for codepoint in range(0x100, 0x1F18A):
+        keysym = UNICODE_OFFSET + codepoint
+        has_lower, has_upper, offset = unicode_entry(codepoint)
+        if has_lower:
+            mapped = keysym + offset
+            lower.append((keysym, normalize_case_result(mapped)))
+        if has_upper:
+            mapped = keysym - offset
+            upper.append((keysym, normalize_case_result(mapped)))
+
+    if len(lower) != expected["lower"] or len(upper) != expected["upper"]:
+        raise ValueError(f"unexpected case counts: lower={len(lower)} upper={len(upper)}")
+    return lower, upper
+
+
+def normalize_case_result(keysym):
+    if keysym < UNICODE_MIN:
+        if keysym < UNICODE_OFFSET:
+            raise ValueError(f"invalid direct Unicode case result: {keysym:#x}")
+        return keysym - UNICODE_OFFSET
+    return keysym
+
+
+def render_source(metadata):
+    files = metadata["files"]
+    values = {
+        "libxkbcommon_version": metadata["version"],
+        "libxkbcommon_tag": metadata["tag"],
+        "libxkbcommon_commit": metadata["commit"],
+        "libxkbcommon_url": metadata["url"],
+        "xorgproto_commit": metadata["xorgproto_commit"],
+        "unicode_version": metadata["unicode_version"],
+        "keysyms_header_sha256": files["keysyms.h"]["sha256"],
+        "keysyms_yaml_sha256": files["keysyms.yaml"]["sha256"],
+        "case_sha256": files["case.c"]["sha256"],
+        "unicode_sha256": files["unicode.c"]["sha256"],
+        "class_sha256": files["class.c"]["sha256"],
+    }
+    return "".join(
+        f"pub const {name} = {json.dumps(value)};\n" for name, value in values.items()
+    )
+
+
+def render_names(names):
+    names = sorted(names)
+    lines = [
+        "pub const Entry = struct {",
+        "    offset: u16,",
+        "    length: u8,",
+        "    keysym: u32,",
+        "};",
+        "",
+        f"pub const count: usize = {len(names)};",
+        f"pub const max_length: usize = {max(len(name) for name, _ in names)};",
+        'const embedded_bytes = @embedFile("name.bytes");',
+        "pub const bytes = embedded_bytes[0 .. embedded_bytes.len - 1];",
+    ]
+    lines.extend(("", "pub const entries = [_]Entry{"))
+    offset = 0
+    for name, keysym in names:
+        lines.append(
+            f"    .{{ .offset = {offset}, .length = {len(name)}, .keysym = 0x{keysym:08x} }},"
+        )
+        offset += len(name)
+    lines.extend(("};", ""))
+    return "\n".join(lines)
+
+
+def render_name_bytes(names):
+    return "".join(name for name, _ in sorted(names)) + "\n"
+
+
+def render_unicode(records):
+    entries = sorted(
+        (record["keysym"], record["code point"])
+        for record in records
+        if "code point" in record
+    )
+    for _, codepoint in entries:
+        if codepoint == 0 or codepoint > 0x10FFFF or 0xD800 <= codepoint <= 0xDFFF:
+            raise ValueError(f"invalid Unicode scalar in semantic data: {codepoint:#x}")
+    lines = [
+        "pub const Entry = struct {",
+        "    keysym: u32,",
+        "    codepoint: u21,",
+        "};",
+        "",
+        f"pub const count: usize = {len(entries)};",
+        "pub const entries = [_]Entry{",
+    ]
+    lines.extend(
+        f"    .{{ .keysym = 0x{keysym:08x}, .codepoint = 0x{codepoint:06x} }},"
+        for keysym, codepoint in entries
+    )
+    lines.extend(("};", ""))
+    return "\n".join(lines)
+
+
+def render_cases(lower, upper):
+    lines = [
+        "pub const Mapping = struct {",
+        "    input: u32,",
+        "    output: u32,",
+        "};",
+        "",
+        f"pub const lower_count: usize = {len(lower)};",
+        "pub const lower = [_]Mapping{",
+    ]
+    lines.extend(
+        f"    .{{ .input = 0x{source:08x}, .output = 0x{target:08x} }},"
+        for source, target in lower
+    )
+    lines.extend(("};", "", f"pub const upper_count: usize = {len(upper)};", "pub const upper = [_]Mapping{"))
+    lines.extend(
+        f"    .{{ .input = 0x{source:08x}, .output = 0x{target:08x} }},"
+        for source, target in upper
+    )
+    lines.extend(("};", ""))
+    return "\n".join(lines)
+
+
+def render_kind(values):
+    return "".join(
+        f"pub const {name}: u32 = 0x{value:08x};\n" for name, value in values.items()
+    )
+
+
+def outputs():
+    metadata = source_metadata()
+    verify_sources(metadata)
+    names = parse_names()
+    records = parse_keysyms()
+    cross_check(names, records, metadata["counts"])
+    lower, upper = parse_cases(metadata["counts"])
+    kinds = classification_data(dict(names))
+    return {
+        GENERATED / "source.zig": render_source(metadata),
+        GENERATED / "name.zig": render_names(names),
+        GENERATED / "name.bytes": render_name_bytes(names),
+        GENERATED / "unicode.zig": render_unicode(records),
+        GENERATED / "case.zig": render_cases(lower, upper),
+        GENERATED / "kind.zig": render_kind(kinds),
+    }
+
+
+def update(rendered):
+    GENERATED.mkdir(parents=True, exist_ok=True)
+    for path, content in rendered.items():
+        path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def check(rendered):
+    stale = []
+    for path, content in rendered.items():
+        if not path.exists() or path.read_text(encoding="utf-8") != content:
+            stale.append(path.relative_to(ROOT))
+    if stale:
+        raise SystemExit("stale generated XKB tables: " + ", ".join(map(str, stale)))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+    rendered = outputs()
+    if arguments.check:
+        check(rendered)
+    else:
+        update(rendered)
+
+
+if __name__ == "__main__":
+    main()

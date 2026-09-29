@@ -1,0 +1,212 @@
+pub const SpirvOp = struct {
+    pub const Extension: u16 = 10;
+    pub const Capability: u16 = 17;
+    pub const ExtInstImport: u16 = 11;
+    pub const ExtInst: u16 = 12;
+    pub const MemoryModel: u16 = 14;
+    pub const EntryPoint: u16 = 15;
+    pub const ExecutionMode: u16 = 16;
+    pub const Decorate: u16 = 71;
+    pub const MemberDecorate: u16 = 72;
+
+    pub const TypeVoid: u16 = 19;
+    pub const TypeBool: u16 = 20;
+    pub const TypeInt: u16 = 21;
+    pub const TypeFloat: u16 = 22;
+    pub const TypeVector: u16 = 23;
+    pub const TypeImage: u16 = 25;
+    pub const TypeSampledImage: u16 = 27;
+    pub const TypeArray: u16 = 28;
+    pub const TypeRuntimeArray: u16 = 29;
+    pub const TypeStruct: u16 = 30;
+    pub const TypePointer: u16 = 32;
+    pub const TypeFunction: u16 = 33;
+
+    pub const ConstantTrue: u16 = 41;
+    pub const ConstantFalse: u16 = 42;
+    pub const Constant: u16 = 43;
+    pub const SpecConstant: u16 = 50;
+    pub const SpecConstantComposite: u16 = 51;
+
+    pub const ConvertFToU: u16 = 109;
+    pub const ConvertFToS: u16 = 110;
+    pub const ConvertSToF: u16 = 111;
+    pub const ConvertUToF: u16 = 112;
+    pub const UConvert: u16 = 113;
+    pub const SConvert: u16 = 114;
+    pub const FConvert: u16 = 115;
+    pub const Bitcast: u16 = 124;
+
+    pub const Function: u16 = 54;
+    pub const FunctionParameter: u16 = 55;
+    pub const FunctionEnd: u16 = 56;
+    pub const FunctionCall: u16 = 57;
+    pub const Variable: u16 = 59;
+    pub const Load: u16 = 61;
+    pub const Store: u16 = 62;
+    pub const AccessChain: u16 = 65;
+    pub const CompositeConstruct: u16 = 80;
+    pub const CompositeExtract: u16 = 81;
+    pub const ImageSampleImplicitLod: u16 = 87;
+    pub const ImageSampleExplicitLod: u16 = 88;
+    pub const DPdxFine: u16 = 210;
+    pub const DPdyFine: u16 = 211;
+    pub const FwidthFine: u16 = 212;
+
+    pub const AtomicExchange: u16 = 229;
+    pub const AtomicCompareExchange: u16 = 230;
+    pub const AtomicIAdd: u16 = 234;
+    pub const AtomicSMin: u16 = 236;
+    pub const AtomicUMin: u16 = 237;
+    pub const AtomicSMax: u16 = 238;
+    pub const AtomicUMax: u16 = 239;
+    pub const AtomicAnd: u16 = 240;
+    pub const AtomicOr: u16 = 241;
+    pub const AtomicXor: u16 = 242;
+
+    pub const LogicalEqual: u16 = 164;
+    pub const LogicalNotEqual: u16 = 165;
+    pub const LogicalOr: u16 = 166;
+    pub const LogicalAnd: u16 = 167;
+    pub const LogicalNot: u16 = 168;
+    pub const Select: u16 = 169;
+    pub const IEqual: u16 = 170;
+    pub const INotEqual: u16 = 171;
+    pub const UGreaterThan: u16 = 172;
+    pub const SGreaterThan: u16 = 173;
+    pub const UGreaterThanEqual: u16 = 174;
+    pub const SGreaterThanEqual: u16 = 175;
+    pub const ULessThan: u16 = 176;
+    pub const SLessThan: u16 = 177;
+    pub const ULessThanEqual: u16 = 178;
+    pub const SLessThanEqual: u16 = 179;
+    pub const FOrdEqual: u16 = 180;
+    pub const FUnordEqual: u16 = 181;
+    pub const FOrdNotEqual: u16 = 182;
+    pub const FUnordNotEqual: u16 = 183;
+    pub const FOrdLessThan: u16 = 184;
+    pub const FUnordLessThan: u16 = 185;
+    pub const FOrdGreaterThan: u16 = 186;
+    pub const FUnordGreaterThan: u16 = 187;
+    pub const FOrdLessThanEqual: u16 = 188;
+    pub const FUnordLessThanEqual: u16 = 189;
+    pub const FOrdGreaterThanEqual: u16 = 190;
+    pub const FUnordGreaterThanEqual: u16 = 191;
+
+    pub const SNegate: u16 = 126;
+    pub const FNegate: u16 = 127;
+    pub const IAdd: u16 = 128;
+    pub const FAdd: u16 = 129;
+    pub const ISub: u16 = 130;
+    pub const FSub: u16 = 131;
+    pub const IMul: u16 = 132;
+    pub const FMul: u16 = 133;
+    pub const UDiv: u16 = 134;
+    pub const SDiv: u16 = 135;
+    pub const FDiv: u16 = 136;
+    pub const UMod: u16 = 137;
+    /// Signed remainders. Vulkan leaves both undefined for a negative operand
+    /// without VK_KHR_maintenance8, so choir never emits them.
+    pub const SRem: u16 = 138;
+    pub const SMod: u16 = 139;
+    pub const UMulExtended: u16 = 151;
+
+    pub const ShiftRightLogical: u16 = 194;
+    pub const ShiftRightArithmetic: u16 = 195;
+    pub const ShiftLeftLogical: u16 = 196;
+    pub const BitwiseOr: u16 = 197;
+    pub const BitwiseXor: u16 = 198;
+    pub const BitwiseAnd: u16 = 199;
+    pub const Not: u16 = 200;
+
+    pub const ControlBarrier: u16 = 224;
+
+    pub const Phi: u16 = 245;
+    pub const LoopMerge: u16 = 246;
+    pub const SelectionMerge: u16 = 247;
+    pub const Label: u16 = 248;
+    pub const Branch: u16 = 249;
+    pub const BranchConditional: u16 = 250;
+    pub const Return: u16 = 253;
+    pub const ReturnValue: u16 = 254;
+
+    pub const GroupNonUniformAny: u16 = 335;
+    pub const GroupNonUniformAll: u16 = 334;
+    pub const GroupNonUniformBallot: u16 = 339;
+    pub const GroupNonUniformShuffle: u16 = 345;
+    pub const GroupNonUniformShuffleXor: u16 = 346;
+    pub const GroupNonUniformShuffleUp: u16 = 347;
+    pub const GroupNonUniformShuffleDown: u16 = 348;
+    pub const GroupNonUniformSMin: u16 = 353;
+    pub const GroupNonUniformUMin: u16 = 354;
+    pub const GroupNonUniformFMax: u16 = 358;
+    pub const GroupNonUniformFMin: u16 = 355;
+    pub const GroupNonUniformSMax: u16 = 356;
+    pub const GroupNonUniformUMax: u16 = 357;
+    pub const GroupNonUniformIAdd: u16 = 349;
+    pub const GroupNonUniformFAdd: u16 = 350;
+    pub const GroupNonUniformBitwiseAnd: u16 = 359;
+    pub const GroupNonUniformBitwiseOr: u16 = 360;
+    pub const GroupNonUniformBitwiseXor: u16 = 361;
+    pub const GroupNonUniformLogicalAnd: u16 = 362;
+    pub const GroupNonUniformLogicalOr: u16 = 363;
+    pub const GroupNonUniformLogicalXor: u16 = 364;
+};
+
+test "spirv op table preserves core opcode values" {
+    const testing = @import("std").testing;
+
+    try testing.expectEqual(@as(u16, 10), SpirvOp.Extension);
+    try testing.expectEqual(@as(u16, 17), SpirvOp.Capability);
+    try testing.expectEqual(@as(u16, 15), SpirvOp.EntryPoint);
+    try testing.expectEqual(@as(u16, 54), SpirvOp.Function);
+    try testing.expectEqual(@as(u16, 248), SpirvOp.Label);
+}
+
+test "spirv op table preserves atomic opcode block" {
+    const testing = @import("std").testing;
+
+    try testing.expectEqual(@as(u16, 229), SpirvOp.AtomicExchange);
+    try testing.expectEqual(@as(u16, 230), SpirvOp.AtomicCompareExchange);
+    try testing.expectEqual(@as(u16, 234), SpirvOp.AtomicIAdd);
+    try testing.expectEqual(@as(u16, 236), SpirvOp.AtomicSMin);
+    try testing.expectEqual(@as(u16, 237), SpirvOp.AtomicUMin);
+    try testing.expectEqual(@as(u16, 238), SpirvOp.AtomicSMax);
+    try testing.expectEqual(@as(u16, 239), SpirvOp.AtomicUMax);
+    try testing.expectEqual(@as(u16, 240), SpirvOp.AtomicAnd);
+    try testing.expectEqual(@as(u16, 241), SpirvOp.AtomicOr);
+    try testing.expectEqual(@as(u16, 242), SpirvOp.AtomicXor);
+}
+
+test "spirv op table preserves logical and comparison opcode block" {
+    const testing = @import("std").testing;
+
+    try testing.expectEqual(@as(u16, 164), SpirvOp.LogicalEqual);
+    try testing.expectEqual(@as(u16, 165), SpirvOp.LogicalNotEqual);
+    try testing.expectEqual(@as(u16, 166), SpirvOp.LogicalOr);
+    try testing.expectEqual(@as(u16, 167), SpirvOp.LogicalAnd);
+    try testing.expectEqual(@as(u16, 168), SpirvOp.LogicalNot);
+    try testing.expectEqual(@as(u16, 169), SpirvOp.Select);
+    try testing.expectEqual(@as(u16, 170), SpirvOp.IEqual);
+    try testing.expectEqual(@as(u16, 171), SpirvOp.INotEqual);
+    try testing.expectEqual(@as(u16, 172), SpirvOp.UGreaterThan);
+    try testing.expectEqual(@as(u16, 173), SpirvOp.SGreaterThan);
+    try testing.expectEqual(@as(u16, 174), SpirvOp.UGreaterThanEqual);
+    try testing.expectEqual(@as(u16, 175), SpirvOp.SGreaterThanEqual);
+    try testing.expectEqual(@as(u16, 176), SpirvOp.ULessThan);
+    try testing.expectEqual(@as(u16, 177), SpirvOp.SLessThan);
+    try testing.expectEqual(@as(u16, 178), SpirvOp.ULessThanEqual);
+    try testing.expectEqual(@as(u16, 179), SpirvOp.SLessThanEqual);
+    try testing.expectEqual(@as(u16, 180), SpirvOp.FOrdEqual);
+    try testing.expectEqual(@as(u16, 181), SpirvOp.FUnordEqual);
+    try testing.expectEqual(@as(u16, 182), SpirvOp.FOrdNotEqual);
+    try testing.expectEqual(@as(u16, 183), SpirvOp.FUnordNotEqual);
+    try testing.expectEqual(@as(u16, 184), SpirvOp.FOrdLessThan);
+    try testing.expectEqual(@as(u16, 185), SpirvOp.FUnordLessThan);
+    try testing.expectEqual(@as(u16, 186), SpirvOp.FOrdGreaterThan);
+    try testing.expectEqual(@as(u16, 187), SpirvOp.FUnordGreaterThan);
+    try testing.expectEqual(@as(u16, 188), SpirvOp.FOrdLessThanEqual);
+    try testing.expectEqual(@as(u16, 189), SpirvOp.FUnordLessThanEqual);
+    try testing.expectEqual(@as(u16, 190), SpirvOp.FOrdGreaterThanEqual);
+    try testing.expectEqual(@as(u16, 191), SpirvOp.FUnordGreaterThanEqual);
+}

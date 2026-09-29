@@ -1,0 +1,15 @@
+.{
+    .name = .alloc_observe_channel,
+    .version = "26.7.0",
+    .fingerprint = 0x894c0a80cb5376c0,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

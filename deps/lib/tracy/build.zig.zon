@@ -1,0 +1,17 @@
+.{
+    .name = .tracy,
+    .version = "26.6.2",
+    .fingerprint = 0x255a89eed74a62b1,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../build/api" },
+        .pretty = .{ .path = "../pretty" },
+        .sys = .{ .path = "../sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

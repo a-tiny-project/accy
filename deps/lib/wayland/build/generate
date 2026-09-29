@@ -1,0 +1,466 @@
+#!/usr/bin/env python3
+
+import argparse
+import hashlib
+import json
+import subprocess
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA = ROOT / "data"
+PROTOCOLS = DATA / "protocols"
+GENERATED = ROOT / "src" / "protocol" / "generated"
+TYPE_CODES = {
+    "int": "i",
+    "uint": "u",
+    "fixed": "f",
+    "string": "s",
+    "object": "o",
+    "new_id": "n",
+    "array": "a",
+    "fd": "h",
+}
+
+
+def source_metadata(path=DATA / "source.json"):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def verify_sources(metadata, base=DATA):
+    for name, expected in metadata["files"].items():
+        actual = hashlib.sha256((base / name).read_bytes()).hexdigest()
+        if actual != expected["sha256"]:
+            raise ValueError(f"source hash mismatch: {name}: {actual}")
+
+
+def zig_string(value):
+    return json.dumps(value, ensure_ascii=True)
+
+
+def zig_optional_string(value):
+    return "null" if value is None else zig_string(value)
+
+
+def zig_identifier(value):
+    return f'@{zig_string(value)}'
+
+
+def integer(element, name, default=None):
+    text = element.get(name)
+    if text is None:
+        if default is None:
+            raise ValueError(f"missing {name}")
+        return default
+    return int(text, 0)
+
+
+def parse_protocol(metadata):
+    return parse_protocols(metadata, DATA, {"wayland"})
+
+
+def parse_protocols(metadata, base, expected_names):
+    interfaces = []
+    counts = {
+        "interfaces": 0,
+        "requests": 0,
+        "events": 0,
+        "arguments": 0,
+        "enumerations": 0,
+        "entries": 0,
+    }
+    names = set()
+    interface_names = set()
+    for file_name in metadata["files"]:
+        protocol = ET.parse(base / file_name).getroot()
+        protocol_name = protocol.get("name")
+        if protocol.tag != "protocol" or protocol_name in names:
+            raise ValueError(f"unexpected protocol root: {file_name}")
+        names.add(protocol_name)
+        for interface_element in protocol.findall("interface"):
+            interface = {
+                "name": interface_element.get("name"),
+                "version": integer(interface_element, "version"),
+                "requests": parse_messages(interface_element.findall("request"), "request"),
+                "events": parse_messages(interface_element.findall("event"), "event"),
+                "enumerations": parse_enumerations(interface_element.findall("enum")),
+            }
+            if interface["name"] in interface_names:
+                raise ValueError(f'duplicate interface: {interface["name"]}')
+            interface_names.add(interface["name"])
+            interfaces.append(interface)
+            counts["interfaces"] += 1
+            counts["requests"] += len(interface["requests"])
+            counts["events"] += len(interface["events"])
+            counts["arguments"] += sum(
+                len(message["arguments"])
+                for message in interface["requests"] + interface["events"]
+            )
+            counts["enumerations"] += len(interface["enumerations"])
+            counts["entries"] += sum(
+                len(enumeration["entries"])
+                for enumeration in interface["enumerations"]
+            )
+    if names != expected_names:
+        raise ValueError(f"protocol roots changed: {names}")
+    if counts != metadata["counts"]:
+        raise ValueError(f"protocol counts changed: {counts}")
+    verify_oracle(interfaces, metadata["oracle"], base)
+    return interfaces
+
+
+def parse_messages(elements, direction):
+    messages = []
+    for opcode, element in enumerate(elements):
+        arguments = []
+        for argument_element in element.findall("arg"):
+            kind = argument_element.get("type")
+            if kind not in TYPE_CODES:
+                raise ValueError(f"unknown argument type: {kind}")
+            nullable = argument_element.get("allow-null") == "true"
+            if nullable and kind not in ("string", "object"):
+                raise ValueError(f"invalid nullable argument: {kind}")
+            arguments.append(
+                {
+                    "name": argument_element.get("name"),
+                    "kind": kind,
+                    "interface": argument_element.get("interface"),
+                    "enumeration": argument_element.get("enum"),
+                    "nullable": nullable,
+                }
+            )
+        since = integer(element, "since", 1)
+        messages.append(
+            {
+                "name": element.get("name"),
+                "direction": direction,
+                "opcode": opcode,
+                "since": since,
+                "deprecated_since": optional_integer(element, "deprecated-since"),
+                "destructor": element.get("type") == "destructor",
+                "arguments": arguments,
+                "signature": signature(since, arguments),
+                "descriptor_count": sum(arg["kind"] == "fd" for arg in arguments),
+                "minimum_payload_size": sum(minimum_size(arg) for arg in arguments),
+            }
+        )
+    return messages
+
+
+def optional_integer(element, name):
+    value = element.get(name)
+    return None if value is None else int(value, 0)
+
+
+def signature(since, arguments):
+    result = str(since) if since > 1 else ""
+    for argument in arguments:
+        if argument["kind"] == "new_id" and argument["interface"] is None:
+            result += "sun"
+            continue
+        if argument["nullable"]:
+            result += "?"
+        result += TYPE_CODES[argument["kind"]]
+    return result
+
+
+def minimum_size(argument):
+    if argument["kind"] == "fd":
+        return 0
+    if argument["kind"] == "new_id" and argument["interface"] is None:
+        return 16
+    if argument["kind"] == "string":
+        return 4 if argument["nullable"] else 8
+    if argument["kind"] == "array":
+        return 4
+    return 4
+
+
+def parse_enumerations(elements):
+    enumerations = []
+    for element in elements:
+        entries = []
+        for entry in element.findall("entry"):
+            entries.append(
+                {
+                    "name": entry.get("name"),
+                    "value": integer(entry, "value"),
+                    "since": integer(entry, "since", 1),
+                    "deprecated_since": optional_integer(entry, "deprecated-since"),
+                }
+            )
+        enumerations.append(
+            {
+                "name": element.get("name"),
+                "since": integer(element, "since", 1),
+                "bitfield": element.get("bitfield") == "true",
+                "entries": entries,
+            }
+        )
+    return enumerations
+
+
+def verify_oracle(interfaces, oracle, base):
+    signatures_path = base / oracle["signatures_file"]
+    signatures_bytes = signatures_path.read_bytes()
+    signatures_hash = hashlib.sha256(signatures_bytes).hexdigest()
+    if signatures_hash != oracle["signatures_sha256"]:
+        raise ValueError(f"signature fixture hash changed: {signatures_hash}")
+    expected = json.loads(signatures_bytes)
+    if len(expected) != oracle["signature_count"]:
+        raise ValueError(f"signature fixture count changed: {len(expected)}")
+    actual = {}
+    for interface in interfaces:
+        for direction in ("request", "event"):
+            for message in interface[direction + "s"]:
+                key = f'{interface["name"]}.{direction}.{message["name"]}'
+                actual[key] = message["signature"]
+    if actual != expected:
+        raise ValueError(f"wayland-scanner signature fixture changed: {actual}")
+
+
+def render_source(metadata):
+    source = metadata["files"]["wayland.xml"]
+    oracle = metadata["oracle"]
+    lines = [
+        f'pub const version = {zig_string(metadata["version"])};',
+        f'pub const tag = {zig_string(metadata["tag"])};',
+        f'pub const url = {zig_string(metadata["url"])};',
+        f'pub const release_url = {zig_string(metadata["release_url"])};',
+        f'pub const archive_sha256 = {zig_string(metadata["archive_sha256"])};',
+        f'pub const xml_sha256 = {zig_string(source["sha256"])};',
+        f'pub const license_sha256 = {zig_string(metadata["license_sha256"])};',
+        f'pub const oracle_tool = {zig_string(oracle["tool"])};',
+        f'pub const oracle_version = {zig_string(oracle["version"])};',
+        f'pub const oracle_output_sha256 = {zig_string(oracle["output_sha256"])};',
+        f'pub const oracle_signatures_sha256 = {zig_string(oracle["signatures_sha256"])};',
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def render_extensions_source(metadata):
+    lines = [
+        f'pub const version = {zig_string(metadata["version"])};',
+        f'pub const tag = {zig_string(metadata["tag"])};',
+        f'pub const url = {zig_string(metadata["url"])};',
+        f'pub const release_url = {zig_string(metadata["release_url"])};',
+        f'pub const archive_sha256 = {zig_string(metadata["archive_sha256"])};',
+        f'pub const license_sha256 = {zig_string(metadata["license_sha256"])};',
+        f'pub const oracle_tool = {zig_string(metadata["oracle"]["tool"])};',
+        f'pub const oracle_version = {zig_string(metadata["oracle"]["version"])};',
+        f'pub const oracle_output_sha256 = {zig_string(metadata["oracle"]["output_sha256"])};',
+        f'pub const oracle_signatures_sha256 = {zig_string(metadata["oracle"]["signatures_sha256"])};',
+        "",
+        "pub const File = struct {",
+        "    name: []const u8,",
+        "    upstream_path: []const u8,",
+        "    sha256: []const u8,",
+        "};",
+        "",
+        "pub const files = [_]File{",
+    ]
+    for name, source in metadata["files"].items():
+        lines.append(
+            "    .{ "
+            f'.name = {zig_string(name)}, '
+            f'.upstream_path = {zig_string(source["upstream_path"])}, '
+            f'.sha256 = {zig_string(source["sha256"])} '
+            "},"
+        )
+    lines.extend(("};", ""))
+    return "\n".join(lines)
+
+
+def render_argument(argument):
+    return (
+        ".{ "
+        f'.name = {zig_string(argument["name"])}, '
+        f'.kind = .{argument["kind"]}, '
+        f'.interface = {zig_optional_string(argument["interface"])}, '
+        f'.enumeration = {zig_optional_string(argument["enumeration"])}, '
+        f'.nullable = {str(argument["nullable"]).lower()} '
+        "}"
+    )
+
+
+def render_message(message, indent):
+    prefix = " " * indent
+    deeper = " " * (indent + 4)
+    lines = [
+        f"{prefix}pub const {zig_identifier(message['name'])}: schema.Message = .{{",
+        f"{deeper}.name = {zig_string(message['name'])},",
+        f"{deeper}.opcode = {message['opcode']},",
+        f"{deeper}.since = {message['since']},",
+        f"{deeper}.deprecated_since = {optional_number(message['deprecated_since'])},",
+        f"{deeper}.destructor = {str(message['destructor']).lower()},",
+        f"{deeper}.signature = {zig_string(message['signature'])},",
+        f"{deeper}.descriptor_count = {message['descriptor_count']},",
+        f"{deeper}.minimum_payload_size = {message['minimum_payload_size']},",
+        f"{deeper}.arguments = &.{{",
+    ]
+    lines.extend(f"{deeper}    {render_argument(argument)}," for argument in message["arguments"])
+    lines.extend((f"{deeper}}},", f"{prefix}}};"))
+    return lines
+
+
+def optional_number(value):
+    return "null" if value is None else str(value)
+
+
+def render_messages(messages, name, indent):
+    prefix = " " * indent
+    lines = [f"{prefix}pub const {name} = struct {{"]
+    for message in messages:
+        lines.extend(render_message(message, indent + 4))
+    values = ", ".join(zig_identifier(message["name"]) for message in messages)
+    lines.append(f"{prefix}    pub const all = [_]schema.Message{{ {values} }};")
+    lines.append(f"{prefix}}};")
+    return lines
+
+
+def render_enumeration(enumeration, indent):
+    prefix = " " * indent
+    deeper = " " * (indent + 4)
+    lines = [
+        f"{prefix}pub const {zig_identifier(enumeration['name'])}: schema.Enumeration = .{{",
+        f"{deeper}.name = {zig_string(enumeration['name'])},",
+        f"{deeper}.since = {enumeration['since']},",
+        f"{deeper}.bitfield = {str(enumeration['bitfield']).lower()},",
+        f"{deeper}.entries = &.{{",
+    ]
+    for entry in enumeration["entries"]:
+        lines.append(
+            f"{deeper}    .{{ .name = {zig_string(entry['name'])}, "
+            f".value = {entry['value']}, .since = {entry['since']}, "
+            f".deprecated_since = {optional_number(entry['deprecated_since'])} }},"
+        )
+    lines.extend((f"{deeper}}},", f"{prefix}}};"))
+    return lines
+
+
+def render_enumerations(enumerations, indent):
+    prefix = " " * indent
+    lines = [f"{prefix}pub const enumerations = struct {{"]
+    for enumeration in enumerations:
+        lines.extend(render_enumeration(enumeration, indent + 4))
+    values = ", ".join(zig_identifier(enumeration["name"]) for enumeration in enumerations)
+    lines.append(f"{prefix}    pub const all = [_]schema.Enumeration{{ {values} }};")
+    lines.append(f"{prefix}}};")
+    return lines
+
+
+def render_interface(interface):
+    name = zig_identifier(interface["name"])
+    lines = [f"pub const {name} = struct {{"]
+    lines.extend(render_messages(interface["requests"], "requests", 4))
+    lines.extend(render_messages(interface["events"], "events", 4))
+    lines.extend(render_enumerations(interface["enumerations"], 4))
+    lines.extend(
+        (
+            "    pub const metadata: schema.Interface = .{",
+            f'        .name = {zig_string(interface["name"])},',
+            f'        .version = {interface["version"]},',
+            "        .requests = &requests.all,",
+            "        .events = &events.all,",
+            "        .enumerations = &enumerations.all,",
+            "    };",
+            "};",
+            "",
+        )
+    )
+    return lines
+
+
+def render_core(interfaces):
+    lines = [
+        'const protocol = @import("../root.zig");',
+        "",
+        "const schema = protocol.schema;",
+        "",
+    ]
+    for interface in interfaces:
+        lines.extend(render_interface(interface))
+    values = ", ".join(f"{zig_identifier(interface['name'])}.metadata" for interface in interfaces)
+    lines.extend((f"pub const interfaces = [_]schema.Interface{{ {values} }};", ""))
+    return "\n".join(lines)
+
+
+def outputs(zig_exe):
+    metadata = source_metadata()
+    verify_sources(metadata)
+    interfaces = parse_protocol(metadata)
+    extensions_metadata = source_metadata(PROTOCOLS / "source.json")
+    verify_sources(extensions_metadata, PROTOCOLS)
+    extension_names = {
+        "cursor_shape_v1",
+        "ext_image_capture_source_v1",
+        "ext_image_copy_capture_v1",
+        "fractional_scale_v1",
+        "linux_dmabuf_v1",
+        "linux_drm_syncobj_v1",
+        "presentation_time",
+        "viewporter",
+        "xdg_decoration_unstable_v1",
+        "xdg_shell",
+    }
+    extension_interfaces = parse_protocols(
+        extensions_metadata,
+        PROTOCOLS,
+        extension_names,
+    )
+    return {
+        GENERATED / "source.zig": format_zig(zig_exe, render_source(metadata)),
+        GENERATED / "core.zig": format_zig(zig_exe, render_core(interfaces)),
+        GENERATED / "extensions.zig": format_zig(
+            zig_exe,
+            render_extensions_source(extensions_metadata)
+        ),
+        GENERATED / "desktop.zig": format_zig(
+            zig_exe,
+            render_core(extension_interfaces),
+        ),
+    }
+
+
+def format_zig(zig_exe, source):
+    result = subprocess.run(
+        [zig_exe, "fmt", "--stdin"],
+        input=source,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def update(rendered):
+    GENERATED.mkdir(parents=True, exist_ok=True)
+    for path, content in rendered.items():
+        path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def check(rendered):
+    stale = []
+    for path, content in rendered.items():
+        if not path.exists() or path.read_text(encoding="utf-8") != content:
+            stale.append(path.relative_to(ROOT))
+    if stale:
+        raise SystemExit("stale generated Wayland schema: " + ", ".join(map(str, stale)))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--zig", required=True, metavar="PATH")
+    parser.add_argument("--check", action="store_true")
+    arguments = parser.parse_args()
+    rendered = outputs(arguments.zig)
+    if arguments.check:
+        check(rendered)
+    else:
+        update(rendered)
+
+
+if __name__ == "__main__":
+    main()

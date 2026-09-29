@@ -1,0 +1,24 @@
+.{
+    .name = .bench,
+    .version = "26.6.2",
+    .fingerprint = 0x66d8e3255d8559f6,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .bench_bootstrap = .{ .path = "../bench/bootstrap" },
+        .build_api = .{ .path = "../../build/api" },
+        .coz = .{ .path = "../coz" },
+        .hypothesis = .{ .path = "../hypothesis" },
+        .memtrace = .{ .path = "../memtrace" },
+        .pretty = .{ .path = "../pretty" },
+        .stabilizer = .{ .path = "../stabilizer" },
+        .sys = .{ .path = "../sys" },
+        .tracy = .{ .path = "../tracy" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

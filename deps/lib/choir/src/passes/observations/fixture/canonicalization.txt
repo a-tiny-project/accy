@@ -1,0 +1,24 @@
+fixture canonicalization_select_inverse
+observation input-ir
+test.module() {
+  ^bb0(%0: !arith.bool):
+    %1 = arith.constant() properties(false) : !arith.bool
+    %2 = arith.constant() properties(true) : !arith.bool
+    %3 = arith.select(%0, %1, %2) : !arith.bool
+    test.user(%3)
+}
+observation pass-trace-and-ir-after-each-pass
+pipeline_begin depth=0 target=any operation=test.module failed=false
+pass_begin name=choir-canonicalize scope=isolated target=test.module
+pass_end name=choir-canonicalize modified=true
+ir-after-pass choir-canonicalize
+test.module() {
+  ^bb0(%0: !arith.bool):
+    %1 = arith.not(%0) : !arith.bool
+    test.user(%1)
+}
+pipeline_end depth=0 target=any operation=test.module failed=false
+observation result
+success
+observation structured-diagnostics
+count=0

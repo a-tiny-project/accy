@@ -1,0 +1,19 @@
+.{
+    .name = .alloc,
+    .version = "26.6.2",
+    .fingerprint = 0x64939495e3a0a022,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .build_api = .{ .path = "../../build/api" },
+        .sys = .{ .path = "../sys" },
+        .deadalloc = .{ .path = "../deadalloc" },
+        .gpalloc = .{ .path = "../gpalloc" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

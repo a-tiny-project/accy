@@ -1,0 +1,23 @@
+.{
+    .name = .choir,
+    .version = "26.6.2",
+    .fingerprint = 0xaf9d698f2ab8c766,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../build/api" },
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .alloc_arena = .{ .path = "../alloc/arena" },
+        .alloc_fixed = .{ .path = "../alloc/fixed" },
+        .gpu_abi = .{ .path = "../gpu/abi" },
+        .sys = .{ .path = "../sys" },
+        .isa = .{ .path = "../isa" },
+        .simd = .{ .path = "../simd" },
+        .pretty_core = .{ .path = "../pretty/core" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

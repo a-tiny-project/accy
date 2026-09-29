@@ -1,0 +1,15 @@
+pub const directory_option = "timing-receipt-dir";
+pub const token_option = "timing-receipt-token";
+pub const directory_environment = "TINY_TIMING_RUNNER_RECEIPT_DIR";
+pub const token_environment = "TINY_TIMING_RUNNER_RECEIPT_TOKEN";
+pub const shard_count_environment = "TINY_TIMING_RUNNER_SHARD_COUNT";
+pub const shard_index_environment = "TINY_TIMING_RUNNER_SHARD_INDEX";
+pub const external_shard_environment = "TINY_TIMING_RUNNER_EXTERNAL_SHARD";
+pub const supervised_environment = "TINY_TIMING_RUNNER_SUPERVISED";
+pub const supervisor_child_environment = "TINY_TIMING_RUNNER_SUPERVISOR_CHILD";
+pub const supervisor_order_environment = "TINY_TIMING_RUNNER_SUPERVISOR_ORDER";
+pub const supervisor_deadline_environment = "TINY_TIMING_RUNNER_DEADLINE_MS";
+pub const supervisor_heartbeat_environment = "TINY_TIMING_RUNNER_HEARTBEAT_MS";
+pub const supervised_selected_cap: usize = 32;
+pub const supervised_deadline_ms: u64 = 5 * 60 * 1000;
+pub const supervised_heartbeat_ms: u64 = 30 * 1000;

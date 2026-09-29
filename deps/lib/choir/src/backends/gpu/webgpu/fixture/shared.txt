@@ -1,0 +1,14 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 1:i64, input_types = [!memref<?,arith.f32,device>], input_types_text = "!memref<?,arith.f32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_shared")} {
+      ^bb0(%0: !memref<?,arith.f32,device>):
+        %1 = memref.alloc() : !memref<16,arith.f32,shared>
+        %2 = arith.constant() properties(0:i64) : !arith.index
+        %3 = arith.constant() properties(1:f64) : !arith.f32
+        memref.store(%3, %1, %2)
+        gpu.barrier() {scope = #attr<gpu.scope>("block")}
+        %4 = memref.load(%1, %2) : !arith.f32
+        memref.store(%4, %0, %2)
+        func.return()
+    }
+}

@@ -1,0 +1,9 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 4:i64, input_types = [!memref<?,arith.f32,device>, !arith.u32, !arith.i64, !arith.f32], input_types_text = "!memref<?,arith.f32,device>,!arith.u32,!arith.i64,!arith.f32", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_scalars")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !arith.u32, %2: !arith.i64, %3: !arith.f32):
+        %4 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        memref.store(%3, %0, %4)
+        func.return()
+    }
+}

@@ -1,0 +1,26 @@
+.{
+    .name = .tiny_build_api,
+    .version = "26.7.0",
+    .fingerprint = 0xfda8a42f5d18107f,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .target_transport_fixture = .{ .path = "fixture/target" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "runner.zig",
+        "src",
+        "README.md",
+        "docs",
+        "fixture",
+        "layout.zig",
+        "link",
+        "loom",
+        "resource",
+        "timing",
+        "tools",
+        "validation",
+    },
+}

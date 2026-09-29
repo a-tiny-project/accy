@@ -1,0 +1,8 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_lane")} {
+      ^bb0:
+        %0 = gpu.lane_id() : !arith.index
+        func.return()
+    }
+}

@@ -1,0 +1,29 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 4:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>, !memref<?,arith.f32,device>, !memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>,!memref<?,arith.f32,device>,!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_elementwise")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>, %2: !memref<?,arith.f32,device>, %3: !memref<?,arith.i32,device>):
+        %4 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %5 = arith.constant() properties(0:i64) : !arith.index
+        %6 = memref.load(%3, %5) : !arith.i32
+        %7 = arith.cast(%4) : !arith.i32
+        %8 = arith.cmp(%7, %6) {predicate = #attr<arith.predicate>("lt")} : !arith.bool
+        scf.if(%8) {
+          ^bb0:
+            %9 = memref.load(%1, %4) : !arith.f32
+            %10 = memref.load(%2, %4) : !arith.f32
+            %11 = arith.floor(%9) : !arith.f32
+            %12 = arith.round(%9) : !arith.f32
+            %13 = arith.add(%11, %12) : !arith.f32
+            %14 = arith.trunc(%10) : !arith.f32
+            %15 = arith.add(%13, %14) : !arith.f32
+            %16 = arith.atan2(%9, %10) : !arith.f32
+            %17 = arith.add(%15, %16) : !arith.f32
+            memref.store(%17, %0, %4)
+            scf.yield()
+        } {
+          ^bb0:
+            scf.yield()
+        }
+        func.return()
+    }
+}

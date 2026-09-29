@@ -1,0 +1,25 @@
+const std = @import("std");
+const validation = @import("../../validation/root.zig");
+const declaration = @import("declaration.zig");
+const source = @import("source.zig");
+
+/// The catalog of the repository at `repository`. validation.catalog.load
+/// owns the inventory rules, and the run-time loader shares them.
+pub fn collect(b: *std.Build, repository: []const u8, tool_catalog: []const u8) declaration.Catalog {
+    std.debug.assert(repository.len != 0);
+    var failure: validation.source.Failure = .{};
+    const tree = source.tree(b, repository, &failure);
+    return validation.catalog.load(b.allocator, tree, tool_catalog) catch |err| {
+        std.debug.panic("validation package inventory: {s} at {s}", .{ @errorName(err), failure.path() });
+    };
+}
+
+pub fn load(
+    b: *std.Build,
+    repository: []const u8,
+    tool_catalog: []const u8,
+) !declaration.Catalog {
+    std.debug.assert(repository.len != 0);
+    var failure: validation.source.Failure = .{};
+    return validation.catalog.load(b.allocator, source.tree(b, repository, &failure), tool_catalog);
+}

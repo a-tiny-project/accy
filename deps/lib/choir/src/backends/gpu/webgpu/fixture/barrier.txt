@@ -1,0 +1,22 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 1:i64, input_types = [!memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_barrier")} {
+      ^bb0(%0: !memref<?,arith.i32,device>):
+        %1 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %2 = arith.cast(%1) : !arith.i32
+        %3 = arith.constant() properties(0:i64) : !arith.i32
+        %4 = arith.constant() properties(1:i64) : !arith.i32
+        %5 = scf.while(%2) : !arith.i32 {
+          ^bb0(%6: !arith.i32):
+            %7 = arith.cmp(%6, %3) {predicate = #attr<arith.predicate>("gt")} : !arith.bool
+            scf.condition(%7, %6)
+        } {
+          ^bb0(%8: !arith.i32):
+            gpu.barrier() {scope = #attr<gpu.scope>("block")}
+            %9 = arith.sub(%8, %4) : !arith.i32
+            scf.yield(%9)
+        }
+        memref.store(%5, %0, %1)
+        func.return()
+    }
+}

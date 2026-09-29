@@ -1,0 +1,947 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    printf 'build resource test: %s\n' "$*" >&2
+    exit 1
+}
+
+[ "$#" -eq 2 ] || fail 'loom and Zig programs are required'
+LOOM=$1
+ZIG=$2
+PACKAGE_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+TMP=$(mktemp -d /tmp/tiny-build-resource-test.XXXXXX)
+PIDS=
+CHECKS=0
+FIXTURE_PID=$$
+RECEIPT_AGENT=loom-resource-fixture-$FIXTURE_PID
+LIVE_GIT_DIRECTORY=$(git rev-parse --path-format=absolute --git-common-dir)
+LIVE_RECEIPT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$LIVE_GIT_DIRECTORY")" && pwd -P)/.loom
+RECEIPT_WORKTREE=$TMP/receipt-worktree
+mkdir -p "$RECEIPT_WORKTREE/build/api"
+git -C "$RECEIPT_WORKTREE" init -q
+cp "$LOOM" "$RECEIPT_WORKTREE/build/api/loom"
+RUNNER=$RECEIPT_WORKTREE/build/api/loom
+REPORTER=$RUNNER
+LOCK_HELPER=$RUNNER
+TINY_LOOM_WORKTREE_ROOT=$RECEIPT_WORKTREE
+FORUM_AGENT=$RECEIPT_AGENT
+export TINY_LOOM_WORKTREE_ROOT FORUM_AGENT
+
+# The receipt worktree carries no repository sources, so the installed tools
+# runner cannot verify a source closure against it. Name the real executable
+# through the launcher's own resolution protocol, which the copied launcher
+# then runs directly.
+if [ -z "${TINY_LOOM_REAL-}" ]; then
+    loom_resolution=$(TINY_LOOM_BOOTSTRAP_RESOLVE=1 "$LOOM" --help) ||
+        fail 'launcher resolution refused'
+    [ "$(printf '%s\n' "$loom_resolution" | sed -n '1p')" = tiny-loom-launch-v1 ] ||
+        fail 'launcher resolution protocol is unknown'
+    TINY_LOOM_REAL=$(printf '%s\n' "$loom_resolution" | sed -n '3p')
+    [ -x "$TINY_LOOM_REAL" ] || fail 'resolved Loom executable is unavailable'
+fi
+export TINY_LOOM_REAL
+
+cleanup() {
+    result=$?
+    trap - EXIT HUP INT TERM
+    for pid in $PIDS; do
+        kill -KILL "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+    done
+    rm -rf "$TMP"
+    exit "$result"
+}
+trap cleanup EXIT HUP INT TERM
+
+check() {
+    CHECKS=$((CHECKS + 1))
+}
+
+wait_for() {
+    path=$1
+    attempt=0
+    while [ ! -e "$path" ] && [ "$attempt" -lt 1000 ]; do
+        sleep 0.01
+        attempt=$((attempt + 1))
+    done
+    [ -e "$path" ] || fail "timed out waiting for $path"
+}
+
+queue_count() {
+    find "$1" -maxdepth 1 -type f -name 'wait-*.lock' | wc -l | tr -d ' '
+}
+
+fixture_receipt_rows() {
+    [ -d "$1" ] || {
+        printf '0\n'
+        return
+    }
+    find "$1" -maxdepth 1 -type f -name 'receipts*.jsonl' \
+        -exec grep -h -E "\"agent\":\"loom-[^\"]*-$FIXTURE_PID\"" {} + \
+        2>/dev/null | wc -l | tr -d ' '
+}
+
+LIVE_RECEIPT_ROWS_BEFORE=$(fixture_receipt_rows "$LIVE_RECEIPT_ROOT")
+
+wait_for_queue() {
+    directory=$1
+    expected=$2
+    attempt=0
+    while [ "$(queue_count "$directory")" -ne "$expected" ] &&
+        [ "$attempt" -lt 1000 ]; do
+        sleep 0.01
+        attempt=$((attempt + 1))
+    done
+    [ "$(queue_count "$directory")" -eq "$expected" ] ||
+        fail "queue did not reach $expected waiters"
+}
+
+# A survey answers for the declared host, so it drops the lane grant this
+# fixture runs under. Work children keep that grant, because it bounds their
+# nested demand.
+survey() {
+    env -u TINY_BUILD_EFFECTIVE_CPU_COUNT \
+        -u TINY_BUILD_EFFECTIVE_TOTAL_MIB \
+        -u TINY_BUILD_EFFECTIVE_TREE_MIB \
+        TINY_BUILD_RESOURCE_CPU_COUNT="$2" \
+        TINY_BUILD_RESOURCE_TOTAL_MIB="$3" \
+        "$1" capacity
+}
+
+capacity() {
+    survey "$RUNNER" "$1" "$2"
+}
+
+reported_capacity() {
+    survey "$REPORTER" "$1" "$2"
+}
+
+unset TINY_BUILD_RESOURCE_LEASE \
+    TINY_BUILD_RESOURCE_LOCK_DIR \
+    TINY_BUILD_RESOURCE_ROOT \
+    TINY_BUILD_RESOURCE_FDS \
+    TINY_BUILD_MEASUREMENT_GATE_FD \
+    TINY_BUILD_RESOURCE_FENCE \
+    TINY_BUILD_RESOURCE_FENCE_ANCHOR \
+    TINY_BUILD_CACHE_LOCK_FD \
+    TINY_BUILD_CACHE_LOCK_PATH
+
+"$RUNNER" --help >"$TMP/help.out"
+"$RUNNER" run --help >"$TMP/run-help.out"
+grep -Fq 'usage: loom run <class> [placement] -- <command> [args...]' \
+    "$TMP/run-help.out" ||
+    fail 'resource help omitted its admission usage'
+grep -Fq 'class    ordinary, heavy, measurement, or auto.' \
+    "$TMP/run-help.out" ||
+    fail 'resource help omitted its admission classes'
+grep -Fq -e '--local ' "$TMP/run-help.out" &&
+    grep -Fq -e '--site <name> ' "$TMP/run-help.out" ||
+    fail 'resource help omitted its placements'
+grep -Fq -e '--system <name> ' "$TMP/run-help.out" ||
+    fail 'resource help omitted its platform requirement'
+grep -Fq 'Admission waits after one second report' "$TMP/help.out" ||
+    fail 'resource help omitted bounded wait diagnostics'
+check
+
+missing_command=$TMP/missing-command
+set +e
+TINY_BUILD_RESOURCE_LOCK_DIR=$TMP/missing-command-resource \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- "$missing_command" \
+    >"$TMP/missing-command.out" 2>"$TMP/missing-command.err"
+missing_command_status=$?
+set -e
+[ "$missing_command_status" -eq 1 ] ||
+    fail "missing resource child status changed: $missing_command_status"
+grep -Fxq 'build resource: resource child could not start: FileNotFound' \
+    "$TMP/missing-command.err" ||
+    fail 'resource child diagnostic omitted the exact spawn cause'
+check
+
+locality_root=$TMP/locality
+locality_package=$locality_root/build_api
+locality_fixture=$locality_package/fixture/resource
+locality_remote=$locality_root/remote-command
+locality_local=$locality_root/local-command
+mkdir -p "$locality_root"
+mkdir -p "$locality_package"
+cp -R "$PACKAGE_ROOT"/* "$locality_package"
+# shellcheck disable=SC2016
+printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    '[ "$1" = run ] && [ "$2" = heavy ]' \
+    'shift 2' \
+    'if [ "$1" = --local ]; then' \
+    '    shift' \
+    '    [ "$1" = -- ]' \
+    '    shift' \
+    '    printf "%s\n" "$1" >"$TINY_RESOURCE_LOCAL_COMMAND"' \
+    '    exec "$@"' \
+    'fi' \
+    '[ "$1" = -- ]' \
+    'shift' \
+    'printf "%s\n" "$1" >"$TINY_RESOURCE_REMOTE_COMMAND"' \
+    'printf "%s\n" "build resource: resource child could not start: FileNotFound" >&2' \
+    'exit 1' \
+    >"$locality_package/loom"
+chmod +x "$locality_package/loom"
+if ! (
+    cd "$locality_fixture"
+    TINY_RESOURCE_REMOTE_COMMAND=$locality_remote \
+        TINY_RESOURCE_LOCAL_COMMAND=$locality_local \
+        ZIG_GLOBAL_CACHE_DIR=$locality_root/global-cache \
+        "$ZIG" build --build-file "$locality_fixture/build.zig" check \
+        --cache-dir "$locality_root/cache"
+) >"$locality_root/build.out" 2>"$locality_root/build.err"; then
+    sed -n '1,80p' "$locality_root/build.err" >&2
+    fail 'build-owned executable crossed into the remote path namespace'
+fi
+[ ! -e "$locality_remote" ] ||
+    fail 'build-owned executable path leaked to a different executor'
+[ -s "$locality_local" ] ||
+    fail 'build-owned executable did not run on its executor'
+case $(sed -n '1p' "$locality_local") in
+    "$locality_root/cache"/*) ;;
+    *) fail 'locality fixture did not execute its build cache artifact' ;;
+esac
+check
+
+while read -r cpu memory; do
+    [ "$(capacity "$cpu" "$memory")" = "$(reported_capacity "$cpu" "$memory")" ] ||
+        fail "capacity reporters disagree at $cpu CPUs and $memory MiB"
+done <<'EOF'
+1 1
+2 4096
+4 4097
+8 8192
+16 9216
+16 14336
+64 31228
+16 65536
+64 262144
+EOF
+check
+
+constrained=$(capacity 16 31228)
+case "$constrained" in
+    system=?*) constrained=${constrained#system=* } ;;
+    *) fail 'surveyed host capacity omitted its system' ;;
+esac
+[ "$constrained" = \
+    'cpus=16 memory_mib=31228 cpu_limited=false memory_limited=false ordinary_slots=12 heavy_slots=8 build_slots=12 build_heavy_slots=8 cpu_tokens=16 memory_tokens=12 ordinary_cpu_weight=2 heavy_cpu_weight=2 heavy_memory_weight=1' ] ||
+    fail 'surveyed host capacity changed'
+check
+
+# Slot counts follow CPU count and the policy maximum. Memory is reserved in
+# bytes per admission, so host memory never moves a slot count.
+slot_fields() {
+    capacity "$1" "$2" | tr ' ' '\n' |
+        grep -E '^(ordinary_slots|heavy_slots|build_slots|build_heavy_slots|memory_tokens)=' |
+        tr '\n' ' '
+}
+[ "$(slot_fields 16 31228)" = "$(slot_fields 16 262144)" ] ||
+    fail 'host memory moved a slot count'
+[ "$(slot_fields 16 4097)" = "$(slot_fields 16 262144)" ] ||
+    fail 'scarce host memory moved a slot count'
+cpu_bounded=$(slot_fields 4 31228)
+[ "$cpu_bounded" = \
+    'ordinary_slots=4 heavy_slots=4 build_slots=4 build_heavy_slots=4 memory_tokens=12 ' ] ||
+    fail "slot counts stopped following CPU count: $cpu_bounded"
+check
+
+if TINY_BUILD_RESOURCE_CPU_COUNT=0 "$RUNNER" capacity >/dev/null 2>&1; then
+    fail 'zero CPU override was accepted'
+fi
+if TINY_BUILD_RESOURCE_TOTAL_MIB=x "$RUNNER" capacity >/dev/null 2>&1; then
+    fail 'malformed memory override was accepted'
+fi
+if TINY_BUILD_RESOURCE_CPU_COUNT=18446744073709551616 \
+    "$RUNNER" capacity >/dev/null 2>&1; then
+    fail 'overflowing CPU override was accepted'
+fi
+check
+
+root=$TMP/root
+marker=$TMP/root.marker
+set +e
+TINY_BUILD_RESOURCE_LOCK_DIR=$root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    TINY_ROOT_MARKER=$marker \
+    "$RUNNER" run ordinary -- sh -c '
+        test "$TINY_BUILD_RESOURCE_LEASE" = ordinary
+        test "$TINY_BUILD_RESOURCE_LOCK_DIR" = "$1"
+        test -n "$TINY_BUILD_RESOURCE_FENCE"
+        test "$TINY_BUILD_RESOURCE_FENCE_ANCHOR" = memory-0
+        old_ifs=$IFS
+        IFS=,
+        for descriptor in $TINY_BUILD_RESOURCE_FDS; do
+            test -e "/proc/$$/fd/$descriptor"
+        done
+        IFS=$old_ifs
+        : >"$TINY_ROOT_MARKER"
+        exit 23
+    ' sh "$root"
+root_status=$?
+set -e
+[ "$root_status" -eq 23 ] || fail "ordinary exit status changed: $root_status"
+[ -e "$marker" ] || fail 'ordinary child did not observe its authority'
+check
+
+for event in enqueue admit start exit release; do
+    grep -Fq "\"event\":\"$event\"" "$root/ledger.jsonl" ||
+        fail "ledger omitted $event"
+done
+grep -Fq '"tokens_held":{"ordinary":1,"heavy":0,"cpu":2,"memory":1}' \
+    "$root/ledger.jsonl" || fail 'ordinary ledger token weights changed'
+grep -F '"event":"release"' "$root/ledger.jsonl" |
+    grep -Fq '"tokens_held":{"ordinary":1,"heavy":0,"cpu":2,"memory":1},"exit_status":23' ||
+    fail 'release ledger omitted held tokens or exit status'
+check
+
+override_root=$TMP/root-override
+TINY_BUILD_RESOURCE_ROOT=$override_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run ordinary -- sh -c \
+    'test "$TINY_BUILD_RESOURCE_LOCK_DIR" = "$1"' sh "$override_root" ||
+    fail 'explicit resource root did not own admission state'
+check
+
+real_runner_path=$TMP/loom-real
+TINY_BUILD_RESOURCE_LOCK_DIR=$TMP/real-runner-root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run heavy --local -- sh -c \
+    'readlink "/proc/$PPID/exe" >"$1"' sh "$real_runner_path" ||
+    fail 'loom executable path was unavailable'
+real_runner=$(sed -n '1p' "$real_runner_path")
+[ -x "$real_runner" ] || fail 'loom executable path was not executable'
+unrecorded=$TMP/unrecorded
+mkdir -p "$unrecorded/work/.git" "$unrecorded/resource"
+: >"$unrecorded/work/.loom"
+: >"$unrecorded/xdg"
+: >"$unrecorded/home"
+: >"$unrecorded/temporary"
+: >"$unrecorded/explicit"
+run_unrecorded() {
+    command=$1
+    (
+        cd "$unrecorded/work"
+        unset TINY_LOOM_WORKTREE_ROOT
+        XDG_CACHE_HOME=$unrecorded/xdg/child \
+            HOME=$unrecorded/home/child \
+            TMPDIR=$unrecorded/temporary/child \
+            TINY_BUILD_RESOURCE_LOCK_DIR=$unrecorded/resource \
+            TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+            TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+            "$real_runner" run heavy --local -- "$command"
+    )
+}
+unrecorded_diagnostic='build resource: receipt attempt is unrecorded because no implicit ledger root is writable'
+run_unrecorded true >"$TMP/unrecorded-true.out" 2>"$TMP/unrecorded-true.err" ||
+    fail 'missing receipt root changed a successful job status'
+[ "$(grep -Fxc "$unrecorded_diagnostic" "$TMP/unrecorded-true.err")" -eq 1 ] ||
+    fail 'successful unrecorded attempt changed its diagnostic count'
+grep -Fxq "$unrecorded_diagnostic" "$TMP/unrecorded-true.err" ||
+    fail 'successful unrecorded attempt lacked its diagnostic'
+set +e
+run_unrecorded false >"$TMP/unrecorded-false.out" 2>"$TMP/unrecorded-false.err"
+unrecorded_status=$?
+set -e
+[ "$unrecorded_status" -eq 1 ] ||
+    fail "unrecorded failed job status changed: $unrecorded_status"
+[ "$(grep -Fxc "$unrecorded_diagnostic" "$TMP/unrecorded-false.err")" -eq 1 ] ||
+    fail 'failed unrecorded attempt changed its diagnostic count'
+grep -Fxq "$unrecorded_diagnostic" "$TMP/unrecorded-false.err" ||
+    fail 'failed unrecorded attempt lacked its diagnostic'
+set +e
+TINY_BUILD_RESOURCE_ROOT=$unrecorded/explicit/child \
+    "$real_runner" run heavy --local -- true \
+    >"$TMP/explicit-unavailable.out" 2>"$TMP/explicit-unavailable.err"
+explicit_unavailable_status=$?
+set -e
+[ "$explicit_unavailable_status" -eq 1 ] ||
+    fail 'unavailable explicit resource root was accepted'
+grep -Fxq 'build resource: resource lock directory is unavailable' \
+    "$TMP/explicit-unavailable.err" ||
+    fail 'unavailable explicit resource root changed its diagnostic'
+check
+
+nested=$TMP/nested
+TINY_BUILD_RESOURCE_LOCK_DIR=$nested \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- \
+    "$RUNNER" run ordinary -- sh -c \
+    'test "$TINY_BUILD_RESOURCE_LEASE" = ordinary' ||
+    fail 'ordinary nesting rejected inherited authority'
+check
+
+TINY_BUILD_RESOURCE_LOCK_DIR=$nested \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- \
+    "$RUNNER" run heavy --local -- sh -c \
+    'test "$TINY_BUILD_RESOURCE_LEASE" = heavy' ||
+    fail 'ordinary-to-heavy upgrade rejected inherited authority'
+grep -Fq '"lane":"upgrade","class":"heavy"' "$nested/ledger.jsonl" ||
+    fail 'heavy upgrade omitted its ledger lane'
+check
+
+invalid=$TMP/invalid
+if TINY_BUILD_RESOURCE_LOCK_DIR=$invalid \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    TINY_BUILD_RESOURCE_FDS=7 \
+    "$RUNNER" run ordinary -- true >"$TMP/invalid.out" 2>"$TMP/invalid.err"; then
+    fail 'root descriptor authority was accepted without a lease'
+fi
+grep -Fq 'resource descriptors require an inherited lease' "$TMP/invalid.err" ||
+    fail 'invalid root descriptor authority lacked its diagnostic'
+check
+
+TINY_BUILD_RESOURCE_LOCK_DIR=$invalid \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- sh -c '
+        unset TINY_BUILD_RESOURCE_FENCE
+        if "$1" run ordinary -- true 2>"$2"; then exit 1; fi
+    ' sh "$RUNNER" "$TMP/missing-fence.err" ||
+    fail 'missing inherited fence test failed'
+grep -Fq 'lacks fencing authority' "$TMP/missing-fence.err" ||
+    fail 'missing inherited fence lacked its diagnostic'
+check
+
+cache_root=$TMP/cache
+mkdir -p "$cache_root"
+cache_lock=$cache_root/cache.lock
+exec 8>"$cache_lock"
+TINY_BUILD_CACHE_LOCK_FD=8 \
+    TINY_BUILD_CACHE_LOCK_PATH=$cache_lock \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$cache_root/resources \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- sh -c \
+    'test -e /proc/$$/fd/8 && test "$TINY_BUILD_CACHE_LOCK_FD" = 8' ||
+    fail 'cache descriptor transport failed'
+check
+
+fifo=$TMP/fifo
+order=$TMP/fifo.order
+# Concurrency follows CPU tokens, and an ordinary root claims two of them.
+# The holders receive a narrowed effective grant of four CPUs, which lowers the
+# lane this fixture runs in and never widens it, so two run while two wait.
+holder() {
+    label=$1
+    duration=$2
+    TINY_BUILD_RESOURCE_LOCK_DIR=$fifo \
+        TINY_BUILD_EFFECTIVE_CPU_COUNT=4 \
+        TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+        TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+        "$RUNNER" run ordinary -- sh -c '
+            printf "%s start\n" "$1" >>"$2"
+            sleep "$3"
+            printf "%s end\n" "$1" >>"$2"
+        ' sh "$label" "$order" "$duration"
+}
+holder one 2.2 >"$TMP/one.out" 2>"$TMP/one.err" &
+one_pid=$!
+PIDS="$PIDS $one_pid"
+holder two 2.2 >"$TMP/two.out" 2>"$TMP/two.err" &
+two_pid=$!
+PIDS="$PIDS $two_pid"
+wait_for "$order"
+while [ "$(grep -c ' start' "$order")" -lt 2 ]; do sleep 0.01; done
+holder three 0.2 >"$TMP/three.out" 2>"$TMP/three.err" &
+three_pid=$!
+PIDS="$PIDS $three_pid"
+sleep 0.05
+holder four 0.2 >"$TMP/four.out" 2>"$TMP/four.err" &
+four_pid=$!
+PIDS="$PIDS $four_pid"
+wait_for_queue "$fifo" 2
+wait "$one_pid"
+wait "$two_pid"
+wait "$three_pid"
+wait "$four_pid"
+PIDS=
+third_line=$(grep -n '^three start$' "$order" | cut -d: -f1)
+fourth_line=$(grep -n '^four start$' "$order" | cut -d: -f1)
+[ "$third_line" -lt "$fourth_line" ] || fail 'root admission order is not FIFO'
+if ! grep -Fq \
+    'waiting kind=ordinary lane=root position=1/2 capacity=build_slots:4,heavy_slots:4,cpu_tokens:4,memory_tokens:12 elapsed=' \
+    "$TMP/three.err" &&
+    ! grep -Eq \
+        '^build resource: waiting kind=ordinary lane=root reason=memory-(headroom|pressure) ' \
+        "$TMP/three.err"; then
+    sed -n '1,80p' "$TMP/three.err" >&2
+    fail 'third waiter diagnostic wording changed'
+fi
+if ! grep -Fq 'tokens acquired kind=ordinary lane=root waited=' "$TMP/three.err"; then
+    sed -n '1,80p' "$TMP/three.err" >&2
+    fail 'third waiter omitted its admission diagnostic'
+fi
+check
+
+stale=$TMP/stale
+mkdir -p "$stale"
+: >"$stale/wait-00000000000000000000.lock"
+TINY_BUILD_RESOURCE_LOCK_DIR=$stale \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run ordinary -- true || fail 'stale root waiter blocked admission'
+[ ! -e "$stale/wait-00000000000000000000.lock" ] ||
+    fail 'stale root waiter was not reclaimed'
+check
+
+signal_root=$TMP/signal
+signal_ready=$TMP/signal.ready
+signal_seen=$TMP/signal.seen
+TINY_BUILD_RESOURCE_LOCK_DIR=$signal_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    TINY_SIGNAL_READY=$signal_ready \
+    TINY_SIGNAL_SEEN=$signal_seen \
+    "$RUNNER" run ordinary -- sh -c '
+        trap '\''echo TERM >"$TINY_SIGNAL_SEEN"; exit 42'\'' TERM
+        : >"$TINY_SIGNAL_READY"
+        while :; do sleep 1; done
+    ' >"$TMP/signal.out" 2>"$TMP/signal.err" &
+signal_pid=$!
+PIDS="$PIDS $signal_pid"
+wait_for "$signal_ready"
+kill -TERM "$signal_pid"
+set +e
+wait "$signal_pid"
+signal_status=$?
+set -e
+PIDS=
+if [ "$signal_status" -ne 42 ]; then
+    sed -n '1,40p' "$TMP/signal.err" >&2
+    printf 'signal trap file: %s\n' "$(cat "$signal_seen" 2>/dev/null || echo absent)" >&2
+    fail "forwarded signal status changed: $signal_status"
+fi
+grep -Fq TERM "$signal_seen" || fail 'root signal did not reach its child group'
+check
+
+receipt_agent=$RECEIPT_AGENT
+receipt_root=$TMP/receipt-resource
+receipt_ready=$TMP/receipt.ready
+set +e
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run ordinary -- sh -c 'exit 9'
+receipt_failed_status=$?
+set -e
+[ "$receipt_failed_status" -eq 9 ] || fail 'failed receipt fixture changed its status'
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run heavy --local -- true || fail 'heavy receipt fixture failed'
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run ordinary -- sh -c ': >"$1"; sleep 1.2' sh "$receipt_ready" &
+receipt_holder=$!
+PIDS="$PIDS $receipt_holder"
+wait_for "$receipt_ready"
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=4 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run ordinary -- true || fail 'waited receipt fixture failed'
+wait "$receipt_holder"
+PIDS=
+receipt_stale_ready=$TMP/receipt-stale.ready
+receipt_stale_payload=$TMP/receipt-stale.pid
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- sh -c 'echo $$ >"$2"; : >"$1"; exec sleep 30' \
+    sh "$receipt_stale_ready" "$receipt_stale_payload" &
+receipt_stale_pid=$!
+PIDS="$PIDS $receipt_stale_pid"
+wait_for "$receipt_stale_ready"
+wait_for "$receipt_stale_payload"
+# A holder whose payload still runs refuses as an orphaned holder, so the
+# supervised payload goes with the root it belongs to.
+kill -KILL "$(cat "$receipt_stale_payload")" 2>/dev/null || true
+kill -KILL "$receipt_stale_pid"
+set +e
+wait "$receipt_stale_pid"
+receipt_stale_status=$?
+set -e
+PIDS=
+[ "$receipt_stale_status" -eq 137 ] || fail 'stale receipt fixture changed its status'
+# A dead holder keeps its memory anchor until an operator reclaims it, which
+# is the remedy the refusal diagnostic names. Reclamation writes its own
+# receipt and frees the anchor for the next root.
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    "$RUNNER" ledger reclaim >"$TMP/reclaim.out" 2>"$TMP/reclaim.err" || {
+    sed -n '1,40p' "$TMP/reclaim.err" >&2
+    fail 'anchor reclamation failed'
+}
+grep -Fq ' reclaimed ' "$TMP/reclaim.out" || {
+    sed -n '1,40p' "$TMP/reclaim.out" >&2
+    fail 'anchor reclamation reported no reclaimed anchor'
+}
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=14336 \
+    "$RUNNER" run heavy --local -- true 2>"$TMP/reclaim-heavy.err" || {
+    sed -n '1,40p' "$TMP/reclaim-heavy.err" >&2
+    fail 'heavy root after reclamation failed'
+}
+set +e
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    TINY_BUILD_RESOURCE_FDS=7 \
+    "$RUNNER" run ordinary -- true >/dev/null 2>&1
+receipt_denied_status=$?
+FORUM_AGENT=$receipt_agent \
+    TINY_BUILD_RESOURCE_LOCK_DIR=$receipt_root \
+    TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+    TINY_BUILD_RESOURCE_TOTAL_MIB=31228 \
+    "$RUNNER" run ordinary -- sh -c 'kill -TERM $$'
+receipt_killed_status=$?
+set -e
+[ "$receipt_denied_status" -eq 1 ] || fail 'denied receipt fixture changed its status'
+[ "$receipt_killed_status" -eq 143 ] || fail 'killed receipt fixture changed its status'
+FORUM_AGENT=$receipt_agent "$RUNNER" ledger \
+    --agent "$receipt_agent" --json >"$TMP/receipts.jsonl"
+for outcome in ok failed reclaimed denied killed; do
+    grep -Fq "\"outcome\":\"$outcome\"" "$TMP/receipts.jsonl" ||
+        fail "receipt fixture omitted $outcome"
+done
+grep -Eq '"wait_ns":[1-9][0-9]{9,}' "$TMP/receipts.jsonl" ||
+    fail 'waited receipt omitted its wait duration'
+grep -Eq '"class":"heavy".*"start_ns":[1-9]' "$TMP/receipts.jsonl" ||
+    fail 'heavy receipt omitted its start timestamp'
+receipt_duplicate=$(
+    sed -n 's/.*"attempt":"\([^"]*\)".*/\1/p' "$TMP/receipts.jsonl" |
+        sort | uniq -d | head -n 1
+)
+[ -z "$receipt_duplicate" ] || fail 'an attempt wrote more than one receipt'
+check
+
+site_root=$TMP/site-sync
+site_source=$site_root/source
+site_remote=$site_root/remote
+site_config=$site_root/config
+site_name=loopback
+site_transport=$site_root/transport
+site_syncs=$site_root/syncs
+site_probes=$site_root/probes
+site_mode=$site_root/mode
+site_system=$(capacity 16 65536 | sed -n 's/^system=\([^ ]*\).*/\1/p')
+[ -n "$site_system" ] || fail 'site fixture system is unavailable'
+mkdir -p "$site_source/build/api" "$site_remote" "$site_config/tiny/sites"
+ln -s "${ZIG%/bin/zig}" "$site_remote/result-zig"
+printf '%s\n' '/.loom/' '/result-zig' >"$site_source/.gitignore"
+# shellcheck disable=SC2016
+printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'TINY_LOOM_WORKTREE_ROOT=$(pwd -P)' \
+    'export TINY_LOOM_WORKTREE_ROOT' \
+    'exec "$TINY_FIXTURE_LOOM" "$@"' \
+    >"$site_source/build/api/loom"
+chmod +x "$site_source/build/api/loom"
+printf 'first\n' >"$site_source/payload"
+git -C "$site_source" init -q
+git -C "$site_source" add .gitignore build/api/loom payload
+git -C "$site_remote" init -q
+: >"$site_syncs"
+: >"$site_probes"
+printf 'normal\n' >"$site_mode"
+# shellcheck disable=SC2016
+printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    'syncs=$1' \
+    'probes=$2' \
+    'mode_path=$3' \
+    'shift 3' \
+    'mode=$(sed -n "1p" "$mode_path")' \
+    '[ "$mode" != unreachable ] || exit 255' \
+    'if [ "$#" -eq 1 ]; then' \
+    '    command=$1' \
+    '    case "$command" in' \
+    '        *"build/api/loom snapshot"*)' \
+    '            probe_count=$(wc -l <"$probes" | tr -d " ")' \
+    '            printf "probe\\n" >>"$probes"' \
+    '            if [ "$mode" = mismatch ] && [ "$probe_count" -eq 1 ]; then' \
+    '                printf "%064d\\n" 0' \
+    '                exit 0' \
+    '            fi' \
+    '            ;;' \
+    '    esac' \
+    '    exec sh -c "$command"' \
+    'fi' \
+    'printf "sync %s\\n" "$*" >>"$syncs"' \
+    'sleep 0.3' \
+    'exec "$@"' \
+    >"$site_transport"
+chmod +x "$site_transport"
+printf 'root=%s\ntransport=%s %s %s %s\nsystem=%s\nheavy_slots=2\n' \
+    "$site_remote" "$site_transport" "$site_syncs" "$site_probes" "$site_mode" \
+    "$site_system" \
+    >"$site_config/tiny/sites/$site_name"
+printf '%s\n' "$site_name" >"$site_config/tiny/sites/.default"
+site_remote_tree=$site_remote/trees/$(basename "$site_source")
+mkdir -p "$site_remote_tree/build/api"
+cp "$site_source/.gitignore" "$site_remote_tree/.gitignore"
+cp "$site_source/build/api/loom" "$site_remote_tree/build/api/loom"
+cp "$site_source/payload" "$site_remote_tree/payload"
+git -C "$site_remote_tree" init -q
+git -C "$site_remote_tree" add .gitignore build/api/loom payload
+printf 'historyless\n' >"$site_remote_tree/.git/tiny-loom-repository-state"
+ln -s ../../result-zig "$site_remote_tree/result-zig"
+(
+    cd "$site_source"
+    TINY_LOOM_WORKTREE_ROOT=$site_source "$real_runner" snapshot --json
+) >"$site_root/local-snapshot"
+(
+    cd "$site_remote_tree"
+    TINY_LOOM_WORKTREE_ROOT=$site_remote_tree "$real_runner" snapshot --json
+) >"$site_root/remote-snapshot"
+if ! cmp -s "$site_root/local-snapshot" "$site_root/remote-snapshot"; then
+    sed -n '1,4p' "$site_root/local-snapshot" >&2
+    sed -n '1,4p' "$site_root/remote-snapshot" >&2
+    fail 'site fixture twins differ before dispatch'
+fi
+(
+    cd "$site_source"
+    XDG_CONFIG_HOME=$site_config \
+        TINY_FIXTURE_LOOM=$real_runner \
+        TINY_LOOM_WORKTREE_ROOT=$site_source \
+        TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+        "$real_runner" sync "$site_name" --json
+) >"$site_root/sync.out" 2>"$site_root/sync.err" || {
+    sed -n '1,80p' "$site_root/sync.out" >&2
+    sed -n '1,80p' "$site_root/sync.err" >&2
+    fail 'site fixture initial sync failed'
+}
+(
+    cd "$site_source"
+    XDG_CONFIG_HOME=$site_config \
+        TINY_FIXTURE_LOOM=$real_runner \
+        TINY_LOOM_WORKTREE_ROOT=$site_source \
+        TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+        "$real_runner" site check "$site_name" --json
+) >"$site_root/check.out" 2>"$site_root/check.err" || {
+    sed -n '1,80p' "$site_root/check.out" >&2
+    sed -n '1,80p' "$site_root/check.err" >&2
+    fail 'site fixture capacity check failed'
+}
+: >"$site_syncs"
+: >"$site_probes"
+printf 'race\n' >"$site_source/payload"
+git -C "$site_source" add payload
+
+site_pair() {
+    agent=$1
+    label=$2
+    (
+        cd "$site_source"
+        FORUM_AGENT=$agent \
+            XDG_CONFIG_HOME=$site_config \
+            TINY_FIXTURE_LOOM=$real_runner \
+            TINY_LOOM_WORKTREE_ROOT=$site_source \
+            TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+            TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+            TINY_BUILD_RESOURCE_TOTAL_MIB=65536 \
+            "$real_runner" run heavy --site "$site_name" -- sh -c 'sleep 0.2'
+    ) >"$site_root/$label-one.out" 2>"$site_root/$label-one.err" &
+    first_pid=$!
+    PIDS="$PIDS $first_pid"
+    (
+        cd "$site_source"
+        FORUM_AGENT=$agent \
+            XDG_CONFIG_HOME=$site_config \
+            TINY_FIXTURE_LOOM=$real_runner \
+            TINY_LOOM_WORKTREE_ROOT=$site_source \
+            TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+            TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+            TINY_BUILD_RESOURCE_TOTAL_MIB=65536 \
+            "$real_runner" run heavy --site "$site_name" -- sh -c 'sleep 0.2'
+    ) >"$site_root/$label-two.out" 2>"$site_root/$label-two.err" &
+    second_pid=$!
+    PIDS="$PIDS $second_pid"
+    set +e
+    wait "$first_pid"
+    first_status=$?
+    wait "$second_pid"
+    second_status=$?
+    set -e
+    PIDS=
+    if [ "$first_status" -ne 0 ] || [ "$second_status" -ne 0 ]; then
+        sed -n '1,80p' "$site_root/$label-one.err" >&2
+        sed -n '1,80p' "$site_root/$label-two.err" >&2
+        fail "site pair failed with statuses $first_status and $second_status"
+    fi
+}
+
+site_receipts() {
+    agent=$1
+    output=$2
+    (
+        cd "$site_source"
+        XDG_CONFIG_HOME=$site_config \
+            TINY_LOOM_WORKTREE_ROOT=$site_source \
+            "$real_runner" ledger --agent "$agent" --json
+    ) >"$output"
+}
+
+race_agent=loom-site-race-$$
+site_pair "$race_agent" race
+race_transfer_count=$(wc -l <"$site_syncs" | tr -d ' ')
+if [ "$race_transfer_count" -ne 2 ]; then
+    sed -n '1,20p' "$site_syncs" >&2
+    fail "concurrent site dispatch performed $race_transfer_count transfer phases"
+fi
+site_receipts "$race_agent" "$site_root/race-receipts"
+[ "$(grep -c "\"agent\":\"$race_agent\"" "$site_root/race-receipts")" -eq 2 ] ||
+    fail 'concurrent site dispatch omitted a receipt'
+[ "$(grep -c "\"executor\":\"$site_name\"" "$site_root/race-receipts")" -eq 2 ] ||
+    fail 'concurrent site dispatch used a local executor'
+check
+
+printf 'second\n' >"$site_source/payload"
+git -C "$site_source" add payload
+: >"$site_syncs"
+: >"$site_probes"
+printf 'mismatch\n' >"$site_mode"
+mismatch_agent=loom-site-mismatch-$$
+site_pair "$mismatch_agent" mismatch
+mismatch_transfer_count=$(wc -l <"$site_syncs" | tr -d ' ')
+if [ "$mismatch_transfer_count" -ne 3 ]; then
+    sed -n '1,20p' "$site_syncs" >&2
+    fail "digest mismatch performed $mismatch_transfer_count transfer phases"
+fi
+site_receipts "$mismatch_agent" "$site_root/mismatch-receipts"
+[ "$(grep -c "\"agent\":\"$mismatch_agent\"" "$site_root/mismatch-receipts")" -eq 2 ] ||
+    fail 'waited digest mismatch omitted a receipt'
+[ "$(grep -c "\"executor\":\"$site_name\"" "$site_root/mismatch-receipts")" -eq 2 ] ||
+    fail 'waited digest mismatch fell back locally'
+check
+
+printf 'unreachable\n' >"$site_mode"
+unreachable_agent=loom-site-unreachable-$$
+(
+    cd "$site_source"
+    FORUM_AGENT=$unreachable_agent \
+        XDG_CONFIG_HOME=$site_config \
+        TINY_FIXTURE_LOOM=$real_runner \
+        TINY_LOOM_WORKTREE_ROOT=$site_source \
+        TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+        TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+        TINY_BUILD_RESOURCE_TOTAL_MIB=65536 \
+        "$real_runner" run heavy --site "$site_name" -- true
+) >"$site_root/unreachable.out" 2>"$site_root/unreachable.err" ||
+    fail 'unreachable site changed the local command status'
+grep -Fxq "loom: site=$site_name fallback=SiteUnreachable, running locally" \
+    "$site_root/unreachable.err" || fail 'unreachable fallback diagnostic changed'
+[ "$(wc -l <"$site_root/unreachable.err" | tr -d ' ')" -eq 1 ] ||
+    fail 'unreachable fallback printed more than one diagnostic'
+site_receipts "$unreachable_agent" "$site_root/unreachable-receipts"
+grep -Fq '"executor":"local"' "$site_root/unreachable-receipts" ||
+    fail 'unreachable fallback omitted the local executor'
+grep -Fq '"fallback":"SiteUnreachable"' "$site_root/unreachable-receipts" ||
+    fail 'unreachable fallback omitted its receipt reason'
+check
+
+explicit_system_agent=loom-site-explicit-system-$$
+set +e
+(
+    cd "$site_source"
+    FORUM_AGENT=$explicit_system_agent \
+        XDG_CONFIG_HOME=$site_config \
+        TINY_FIXTURE_LOOM=$real_runner \
+        TINY_LOOM_WORKTREE_ROOT=$site_source \
+        TINY_BUILD_RESOURCE_LOCK_DIR=$site_root/resources \
+        TINY_BUILD_RESOURCE_CPU_COUNT=16 \
+        TINY_BUILD_RESOURCE_TOTAL_MIB=65536 \
+        "$real_runner" run heavy --site "$site_name" \
+        --system "$site_system" -- sh -c 'printf "cross-system-leak\n"'
+) >"$site_root/explicit-system.out" 2>"$site_root/explicit-system.err"
+explicit_system_status=$?
+set -e
+[ "$explicit_system_status" -eq 1 ] ||
+    fail 'an unavailable explicit-system site did not fail closed'
+grep -Fxq \
+    "loom: site=$site_name unavailable=SiteUnreachable required_system=$site_system, refusing local fallback" \
+    "$site_root/explicit-system.err" ||
+    fail 'explicit-system refusal diagnostic changed'
+[ "$(wc -l <"$site_root/explicit-system.err" | tr -d ' ')" -eq 1 ] ||
+    fail 'explicit-system refusal printed more than one diagnostic'
+[ ! -s "$site_root/explicit-system.out" ] ||
+    fail 'an unavailable explicit-system site leaked command output locally'
+site_receipts "$explicit_system_agent" "$site_root/explicit-system-receipts"
+[ ! -s "$site_root/explicit-system-receipts" ] ||
+    fail 'an unavailable explicit-system site wrote a local receipt'
+check
+
+descriptor_file=$TMP/descriptor.lock
+exec 7>"$descriptor_file"
+"$LOCK_HELPER" lock-fd -n -x 7 || fail 'exclusive descriptor probe failed'
+"$LOCK_HELPER" lock-fd -s --pass-fd 8 7 -- sh -c '
+    test -e /proc/$$/fd/7
+    test -e /proc/$$/fd/8
+    test ! -e /proc/$$/fd/9
+' 8>/dev/null 9>/dev/null || fail 'descriptor transport isolation failed'
+check
+
+drain_started=$(date +%s)
+set +e
+"$LOCK_HELPER" lock-fd -s --supervise 7 -- sh -c 'sleep 30 & exit 5'
+drain_status=$?
+set -e
+drain_finished=$(date +%s)
+[ "$drain_status" -eq 5 ] || fail 'supervised descriptor status changed'
+[ $((drain_finished - drain_started)) -le 3 ] || fail 'supervised drain exceeded its bound'
+check
+
+group_request=$TMP/group.request
+group_observed=$TMP/group.observed
+TINY_ITERATE_GROUP_SIGNAL_REQUEST=$group_request \
+    TINY_ITERATE_GROUP_SIGNAL_OBSERVED=$group_observed \
+    "$LOCK_HELPER" group sh -c '
+        test -z "${TINY_ITERATE_GROUP_SIGNAL_REQUEST-}"
+        while :; do sleep 1; done
+    ' &
+group_pid=$!
+PIDS="$PIDS $group_pid"
+wait_for "$group_observed.owner"
+group_owner=$(sed -n '1p' "$group_observed.owner")
+printf '%s 15\n' "$group_owner" >"$group_request.15"
+kill -TERM "$group_owner"
+set +e
+wait "$group_pid"
+group_status=$?
+set -e
+PIDS=
+[ "$group_status" -eq 143 ] || fail 'group signal status changed'
+grep -Fq "$group_owner 15" "$group_observed.15" ||
+    fail 'group signal observation was not published'
+check
+
+LIVE_RECEIPT_ROWS_AFTER=$(fixture_receipt_rows "$LIVE_RECEIPT_ROOT")
+[ "$LIVE_RECEIPT_ROWS_AFTER" -eq "$LIVE_RECEIPT_ROWS_BEFORE" ] ||
+    fail "live receipt store gained $((LIVE_RECEIPT_ROWS_AFTER - LIVE_RECEIPT_ROWS_BEFORE)) fixture rows"
+check
+
+printf 'build resource test: %s checks passed\n' "$CHECKS"

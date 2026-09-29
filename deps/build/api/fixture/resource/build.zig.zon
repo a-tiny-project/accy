@@ -1,0 +1,14 @@
+.{
+    .name = .resource_locality_fixture,
+    .version = "26.8.0",
+    .fingerprint = 0x091b5a23dfda1bea,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../.." },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+    },
+}

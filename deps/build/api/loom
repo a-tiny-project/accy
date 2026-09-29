@@ -1,0 +1,575 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)
+
+zig_build_command() {
+    [ "${1-}" = zig ] || return 1
+    case "${2-}" in
+        '' | -h | --help | help | fetch | init | fmt | ar | dlltool | lib | \
+            objcopy | objdump | ranlib | rc | env | std | libc | targets | \
+            version | zen) return 1 ;;
+        build)
+            shift 2
+            for argument; do
+                [ "$argument" != -- ] || break
+                case "$argument" in
+                    -h | --help | -l | --list-steps | --fetch | --fetch=* | \
+                        --print-configuration | --print-configuration-path)
+                        return 1
+                        ;;
+                esac
+            done
+            ;;
+        *)
+            case "${3-}" in -h | --help) return 1 ;; esac
+            ;;
+    esac
+    return 0
+}
+
+zig_build_directory() {
+    build_directory=$(pwd -P)
+    if [ "${2-}" = build ]; then
+        shift 2
+        build_file=
+        while [ "$#" -gt 0 ]; do
+            case "$1" in
+                --) break ;;
+                --build-file)
+                    shift
+                    [ "$#" -gt 0 ] || break
+                    build_file=$1
+                    ;;
+                --build-file=*) build_file=${1#--build-file=} ;;
+            esac
+            shift
+        done
+        if [ -n "$build_file" ]; then
+            build_file_directory=$(dirname -- "$build_file")
+            build_directory=$(CDPATH='' cd -P -- "$build_file_directory" && pwd -P) ||
+                build_directory=
+        fi
+    fi
+}
+
+if zig_build_command "$@"; then
+    zig_build_directory "$@"
+    if [ -n "$build_directory" ]; then
+        wrapper_common=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+            git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir \
+            2>/dev/null || printf '')
+        build_common=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+            git -C "$build_directory" rev-parse --path-format=absolute \
+            --git-common-dir 2>/dev/null || printf '')
+        if [ -n "$wrapper_common" ] && [ -n "$build_common" ]; then
+            wrapper_common=$(CDPATH='' cd -P -- "$wrapper_common" && pwd -P)
+            build_common=$(CDPATH='' cd -P -- "$build_common" && pwd -P)
+            if [ "$wrapper_common" = "$build_common" ]; then
+                build_root=$(env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+                    git -C "$build_directory" rev-parse --show-toplevel \
+                    2>/dev/null || printf '')
+                if [ -n "$build_root" ]; then
+                    build_root=$(CDPATH='' cd -P -- "$build_root" && pwd -P)
+                    if [ "$build_root" != "$ROOT" ]; then
+                        if [ -n "${TINY_LOOM_REDIRECTED_FROM-}" ]; then
+                            printf 'loom: build in %s still differs from wrapper %s after redirect from %s\n' \
+                                "$build_root" "$ROOT" "$TINY_LOOM_REDIRECTED_FROM" >&2
+                            exit 1
+                        fi
+                        target_loom=$build_root/build/api/loom
+                        if [ ! -x "$target_loom" ]; then
+                            printf 'loom: build in %s cannot use wrapper %s: target launcher is unavailable: %s\n' \
+                                "$build_root" "$ROOT" "$target_loom" >&2
+                            exit 1
+                        fi
+                        printf 'loom: build in %s runs %s; this wrapper belongs to %s\n' \
+                            "$build_root" "$target_loom" "$ROOT" >&2
+                        TINY_LOOM_REDIRECTED_FROM=$ROOT
+                        TINY_REPO_ROOT=$build_root
+                        export TINY_LOOM_REDIRECTED_FROM TINY_REPO_ROOT
+                        exec "$target_loom" "$@"
+                    fi
+                fi
+            fi
+        fi
+    fi
+fi
+unset TINY_LOOM_REDIRECTED_FROM
+
+if [ -z "${TINY_LOOM_LAUNCHER_START_NS-}" ]; then
+    TINY_LOOM_LAUNCHER_START_NS=$(date +%s%N 2>/dev/null || printf '')
+    case "$TINY_LOOM_LAUNCHER_START_NS" in
+        '' | *[!0-9]*) unset TINY_LOOM_LAUNCHER_START_NS ;;
+        *) export TINY_LOOM_LAUNCHER_START_NS ;;
+    esac
+fi
+
+die() {
+    printf 'loom bootstrap: %s\n' "$*" >&2
+    exit 1
+}
+
+TINY_LOOM_WORKTREE_ROOT=$ROOT
+export TINY_LOOM_WORKTREE_ROOT
+TOOLS_SOURCE_FALLBACK=${TINY_REPOSITORY_TOOLS_SOURCE_FALLBACK-}
+unset TINY_REPOSITORY_TOOLS_SOURCE_FALLBACK
+case "$TOOLS_SOURCE_FALLBACK" in
+    '' | 1) ;;
+    *) die 'repository tools source fallback is invalid' ;;
+esac
+BOOTSTRAP_SOURCE_REQUEST=${TINY_LOOM_BOOTSTRAP_SOURCE-}
+case "$BOOTSTRAP_SOURCE_REQUEST" in
+    '' | 1) ;;
+    *) die 'bootstrap source request is invalid' ;;
+esac
+SOURCE_OBSERVATION_HANDOFF=${TINY_LOOM_SOURCE_OBSERVATION_HANDOFF-}
+unset TINY_LOOM_SOURCE_OBSERVATION_HANDOFF
+case "$SOURCE_OBSERVATION_HANDOFF" in
+    '') ;;
+    *) die 'source observation handoff is caller-owned' ;;
+esac
+[ "$TOOLS_SOURCE_FALLBACK" != 1 ] || TINY_LOOM_BOOTSTRAP_SOURCE=1
+LOOM_RESOLVE=${TINY_LOOM_BOOTSTRAP_RESOLVE-}
+unset TINY_LOOM_BOOTSTRAP_RESOLVE
+case "$LOOM_RESOLVE" in
+    '' | 1) ;;
+    *) die 'bootstrap resolution mode is invalid' ;;
+esac
+BOOTSTRAP_DRIVER=${TINY_LOOM_BOOTSTRAP_DRIVER-}
+unset TINY_LOOM_BOOTSTRAP_DRIVER
+case "$BOOTSTRAP_DRIVER" in
+    '') ;;
+    *) die 'bootstrap driver marker is caller-owned' ;;
+esac
+
+resolve_candidate() {
+    kind=$1
+    candidate=$2
+    prefix=${3-}
+    case "$candidate" in
+        /*) ;;
+        *) die "resolved executable path must be absolute: $candidate" ;;
+    esac
+    if [ "$kind" = tools ]; then
+        case "$prefix" in
+            /*) ;;
+            *) die "resolved install prefix must be absolute: $prefix" ;;
+        esac
+        printf 'tiny-loom-launch-v1\ntools\n%s\n%s\n' "$candidate" "$prefix"
+    else
+        printf 'tiny-loom-launch-v1\ndirect\n%s\n' "$candidate"
+    fi
+    exit 0
+}
+
+run_candidate() {
+    candidate=$1
+    shift
+    [ -n "$candidate" ] && [ -x "$candidate" ] || return 1
+    [ -z "$LOOM_RESOLVE" ] || resolve_candidate direct "$candidate"
+    exec "$candidate" "$@"
+}
+
+# A process tree that pinned a generation of this prefix keeps its Loom.
+pinned_generation() {
+    prefix=$1
+    generation=${TINY_REPOSITORY_TOOLS_GENERATION-}
+    [ "${TINY_REPOSITORY_TOOLS_PREFIX-}" = "$prefix" ] || return 1
+    case "${generation#"$prefix"/share/tiny/generations/}" in
+        "$generation" | '' | 0* | *[!0-9]*) return 1 ;;
+    esac
+    [ -x "$generation/bin/loom" ]
+}
+
+run_tool_candidate() {
+    prefix=$1
+    shift
+    candidate=$prefix/bin/loom
+    if pinned_generation "$prefix"; then
+        candidate=$TINY_REPOSITORY_TOOLS_GENERATION/bin/loom
+    fi
+    [ -x "$candidate" ] || return 1
+    if [ "${1-}" = lock-fd ]; then
+        exec "$candidate" "$@"
+    fi
+    run_protocol=$(
+        # A capability query is a subprocess, not the supervised work child.
+        # Keep the original owner marker for the final exec below.
+        unset TINY_ITERATE_GROUP_OWNER
+        "$candidate" tools run --protocol 2>/dev/null || printf ''
+    )
+    [ "$run_protocol" = tiny-repository-tools-run-v1 ] || return 1
+    if [ "${1-}" = tools ] && [ "${2-}" = status ]; then
+        run_candidate "$candidate" "$@"
+    fi
+    [ -z "$LOOM_RESOLVE" ] || resolve_candidate tools "$candidate" "$prefix"
+    exec "$candidate" tools run --prefix "$prefix" \
+        --fallback "$ROOT/build/api/loom" -- loom "$@"
+}
+
+native_candidate_compatible() {
+    native_candidate=$1
+    [ -n "$native_candidate" ] && [ -x "$native_candidate" ] || return 1
+    native_protocol=$(
+        unset TINY_ITERATE_GROUP_OWNER
+        "$native_candidate" cache bootstrap protocol 2>/dev/null || printf ''
+    )
+    [ "$native_protocol" = tiny-loom-bootstrap-cache-v1 ]
+}
+
+canonical_file() {
+    candidate_file=$1
+    canonical_hops=0
+    while :; do
+        canonical_dir=$(CDPATH='' cd -P -- "$(dirname -- "$candidate_file")" && pwd -P) ||
+            die 'bootstrap compiler directory is unavailable'
+        candidate_file=$canonical_dir/$(basename -- "$candidate_file")
+        [ -L "$candidate_file" ] || break
+        canonical_hops=$((canonical_hops + 1))
+        [ "$canonical_hops" -le 32 ] || die 'bootstrap compiler symlink chain is too deep'
+        target=$(readlink "$candidate_file") || die 'bootstrap compiler symlink is unreadable'
+        case "$target" in
+            /*) candidate_file=$target ;;
+            *) candidate_file=$canonical_dir/$target ;;
+        esac
+    done
+    printf '%s\n' "$candidate_file"
+}
+
+select_native_candidate() {
+    NATIVE_LOOM=
+    NATIVE_LOOM_SHARED=
+    if [ -n "${TINY_LOOM_REAL-}" ] &&
+        native_candidate_compatible "$TINY_LOOM_REAL"; then
+        NATIVE_LOOM=$TINY_LOOM_REAL
+    fi
+    if [ -z "$NATIVE_LOOM" ] && [ -n "${TINY_REPOSITORY_TOOLS_PREFIX-}" ]; then
+        native_candidate=$TINY_REPOSITORY_TOOLS_PREFIX/bin/loom
+        if native_candidate_compatible "$native_candidate"; then
+            NATIVE_LOOM=$native_candidate
+        fi
+    fi
+    if [ -z "$NATIVE_LOOM" ] && [ -n "${HOME-}" ]; then
+        native_candidate=$HOME/.local/bin/loom
+        if native_candidate_compatible "$native_candidate"; then
+            NATIVE_LOOM=$native_candidate
+        fi
+    fi
+    if [ -n "$NATIVE_LOOM" ]; then
+        native_shared_protocol=$(
+            unset TINY_ITERATE_GROUP_OWNER
+            "$NATIVE_LOOM" cache bootstrap protocol --shared 2>/dev/null || printf ''
+        )
+        [ "$native_shared_protocol" != tiny-loom-bootstrap-cache-v2 ] ||
+            NATIVE_LOOM_SHARED=1
+    fi
+}
+
+if [ "${1-}" = cache ] && [ "${2-}" = bootstrap ]; then
+    case "${3-}" in
+        report | apply | protocol)
+            select_native_candidate
+            [ -n "$NATIVE_LOOM" ] ||
+                die 'native bootstrap maintenance owner is unavailable'
+            exec "$NATIVE_LOOM" "$@"
+            ;;
+    esac
+fi
+
+if [ "${TINY_LOOM_BOOTSTRAP_SOURCE-}" != 1 ]; then
+    if [ -n "${TINY_LOOM_REAL-}" ]; then
+        LOOM_REAL=$TINY_LOOM_REAL
+        run_candidate "$LOOM_REAL" "$@" ||
+            die "configured executable is unavailable: $LOOM_REAL"
+    fi
+
+    if [ -n "${TINY_REPOSITORY_TOOLS_PREFIX-}" ]; then
+        run_tool_candidate "$TINY_REPOSITORY_TOOLS_PREFIX" "$@" || true
+    fi
+    run_tool_candidate "${HOME:?HOME is required}/.local" "$@" || true
+fi
+
+if [ "${1-}" = tools ] && [ "${2-}" = status ]; then
+    die 'installed Loom is unavailable for tools status; run skills/worktree/refresh --wait --tool loom'
+fi
+
+TINY_LOOM_LAUNCHER_SOURCE_FALLBACK=1
+export TINY_LOOM_LAUNCHER_SOURCE_FALLBACK
+
+if [ "${TINY_LOOM_BOOTSTRAP_SOURCE-}" = 1 ] && [ -x "$ROOT/result-zig/bin/zig" ]; then
+    BOOTSTRAP_ZIG=$ROOT/result-zig/bin/zig
+elif [ -n "${TINY_ZIG_REAL-}" ] && [ -x "$TINY_ZIG_REAL" ]; then
+    BOOTSTRAP_ZIG=$TINY_ZIG_REAL
+elif [ -x "$ROOT/result-zig/bin/zig" ]; then
+    BOOTSTRAP_ZIG=$ROOT/result-zig/bin/zig
+elif [ -x "$HOME/.local/bin/zig" ]; then
+    BOOTSTRAP_ZIG=$HOME/.local/bin/zig
+else
+    BOOTSTRAP_ZIG=$(command -v zig 2>/dev/null || printf '')
+fi
+[ -n "$BOOTSTRAP_ZIG" ] && [ -x "$BOOTSTRAP_ZIG" ] ||
+    die 'loom and a bootstrap Zig compiler are unavailable'
+
+if [ -n "${XDG_CACHE_HOME-}" ]; then
+    BOOTSTRAP_CACHE=$XDG_CACHE_HOME
+elif [ -d "$HOME" ] && [ -w "$HOME" ]; then
+    BOOTSTRAP_CACHE=$HOME/.cache
+else
+    BOOTSTRAP_CACHE=${TMPDIR:-/tmp}
+fi
+BOOTSTRAP_ID_STATE=$(mktemp -d "${TMPDIR:-/tmp}/tiny-loom-source.XXXXXX") ||
+    die 'Loom source identity scratch is unavailable'
+cleanup_bootstrap_id() {
+    rm -rf -- "$BOOTSTRAP_ID_STATE"
+}
+trap cleanup_bootstrap_id 0 1 2 15
+BOOTSTRAP_ID_GIT=$BOOTSTRAP_ID_STATE/repository.git
+git init --quiet --bare --object-format=sha1 "$BOOTSTRAP_ID_GIT" ||
+    die 'Loom source identity repository is unavailable'
+while IFS= read -r source_path; do
+    [ -n "$source_path" ] || continue
+    if [ -e "$ROOT/$source_path" ] || [ -L "$ROOT/$source_path" ]; then
+        GIT_INDEX_FILE=$BOOTSTRAP_ID_GIT/index \
+            git -C "$ROOT" --git-dir="$BOOTSTRAP_ID_GIT" --work-tree="$ROOT" \
+            add --all -- "$source_path" ||
+            die 'Loom source identity could not stage its build closure'
+        # The scratch index has no tracked history. Git's ordinary add omits
+        # tracked files beneath ignored directories unless they are forced.
+        if env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+            git -C "$ROOT" ls-files -z -- "$source_path" \
+            >"$BOOTSTRAP_ID_STATE/tracked" 2>/dev/null &&
+            [ -s "$BOOTSTRAP_ID_STATE/tracked" ]; then
+            GIT_INDEX_FILE=$BOOTSTRAP_ID_GIT/index \
+                xargs -0 git -C "$ROOT" --git-dir="$BOOTSTRAP_ID_GIT" \
+                --work-tree="$ROOT" add --force --all -- \
+                <"$BOOTSTRAP_ID_STATE/tracked" ||
+                die 'Loom tracked source identity could not stage its build closure'
+        fi
+    fi
+done <"$ROOT/tools/loom/build/source-closure"
+# Commit hooks export GIT_INDEX_FILE. Pin the scratch index so a caller
+# environment cannot redirect the identity computation.
+OBSERVED_BOOTSTRAP_SOURCE_ID=$(
+    GIT_INDEX_FILE=$BOOTSTRAP_ID_GIT/index \
+        git --git-dir="$BOOTSTRAP_ID_GIT" write-tree 2>/dev/null || printf ''
+)
+BOOTSTRAP_SOURCE_ID=${TINY_LOOM_BOOTSTRAP_SOURCE_ID:-$OBSERVED_BOOTSTRAP_SOURCE_ID}
+case "$BOOTSTRAP_SOURCE_ID" in
+    '' | *[!0-9a-f]*) die 'Loom source identity is unavailable' ;;
+esac
+[ "${#BOOTSTRAP_SOURCE_ID}" -eq 40 ] ||
+    die 'Loom source identity is unavailable'
+if [ "$BOOTSTRAP_SOURCE_ID" != "$OBSERVED_BOOTSTRAP_SOURCE_ID" ]; then
+    die 'declared Loom source identity does not match the repository'
+fi
+# A v1 manager still owns the per-worktree cache. Keep its original key and
+# argument shape so a new wrapper never sends a shared prefix to old Loom.
+NATIVE_LOOM=
+NATIVE_LOOM_SHARED=
+if [ -z "$BOOTSTRAP_SOURCE_REQUEST" ]; then
+    select_native_candidate
+fi
+if [ -n "$NATIVE_LOOM" ] && [ -z "$NATIVE_LOOM_SHARED" ]; then
+    BOOTSTRAP_WORKTREE_ID=$(
+        printf '%s\n' "$ROOT" |
+            git --git-dir="$BOOTSTRAP_ID_GIT" hash-object --stdin
+    ) || die 'Loom worktree identity is unavailable'
+    cleanup_bootstrap_id
+    trap - 0 1 2 15
+    XDG_CACHE_HOME=$BOOTSTRAP_CACHE
+    export XDG_CACHE_HOME
+    unset TINY_LOOM_BOOTSTRAP_SOURCE
+    if [ "$TOOLS_SOURCE_FALLBACK" = 1 ] &&
+        [ "${TINY_LOOM_PUBLICATION_OBSERVER_FDS+x}" = x ]; then
+        TINY_LOOM_SOURCE_OBSERVATION_HANDOFF=1
+        TINY_LOOM_BOOTSTRAP_DRIVER=1
+        export TINY_LOOM_SOURCE_OBSERVATION_HANDOFF TINY_LOOM_BOOTSTRAP_DRIVER
+    fi
+    if [ -n "$LOOM_RESOLVE" ]; then
+        exec "$NATIVE_LOOM" cache bootstrap run --resolve \
+            --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+            --source "$BOOTSTRAP_SOURCE_ID" \
+            --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"
+    fi
+    exec "$NATIVE_LOOM" cache bootstrap run \
+        --fallback "$NATIVE_LOOM" \
+        --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+        --source "$BOOTSTRAP_SOURCE_ID" \
+        --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"
+fi
+BOOTSTRAP_COMPILER_PATH=$(canonical_file "$BOOTSTRAP_ZIG")
+BOOTSTRAP_ZIG=$BOOTSTRAP_COMPILER_PATH
+BOOTSTRAP_COMPILER_GIT=$BOOTSTRAP_ID_STATE/compiler-digest.git
+git init --quiet --bare --object-format=sha256 "$BOOTSTRAP_COMPILER_GIT" ||
+    die 'Loom compiler identity repository is unavailable'
+BOOTSTRAP_COMPILER_DIGEST=$(git --git-dir="$BOOTSTRAP_COMPILER_GIT" \
+    hash-object "$BOOTSTRAP_ZIG") ||
+    die 'Loom compiler identity is unavailable'
+case "$BOOTSTRAP_COMPILER_DIGEST" in
+    *[!0-9a-f]* | '') die 'Loom compiler identity is unavailable' ;;
+esac
+[ "${#BOOTSTRAP_COMPILER_DIGEST}" -eq 64 ] ||
+    die 'Loom compiler identity is unavailable'
+BOOTSTRAP_SDK=${BOOTSTRAP_ZIG%/bin/zig}
+case "$BOOTSTRAP_ZIG" in
+    /nix/store/*/bin/zig) BOOTSTRAP_LIB_ID=immutable-store ;;
+    *)
+        if [ -d "$BOOTSTRAP_SDK/lib/zig" ]; then
+            BOOTSTRAP_LIB_GIT=$BOOTSTRAP_ID_STATE/compiler.git
+            git init --quiet --bare "$BOOTSTRAP_LIB_GIT" ||
+                die 'Loom compiler library identity repository is unavailable'
+            GIT_INDEX_FILE=$BOOTSTRAP_LIB_GIT/index \
+                git -C "$BOOTSTRAP_SDK" --git-dir="$BOOTSTRAP_LIB_GIT" \
+                --work-tree="$BOOTSTRAP_SDK" add --all -- lib/zig ||
+                die 'Loom compiler library identity is unavailable'
+            BOOTSTRAP_LIB_ID=$(
+                GIT_INDEX_FILE=$BOOTSTRAP_LIB_GIT/index \
+                    git --git-dir="$BOOTSTRAP_LIB_GIT" write-tree
+            ) || die 'Loom compiler library identity is unavailable'
+        else
+            BOOTSTRAP_LIB_ID=absent
+        fi
+        ;;
+esac
+BOOTSTRAP_WORKTREE_ID=$(
+    printf 'bootstrap-shared-v2\n%s\n%s\n%s\n' \
+        "$BOOTSTRAP_COMPILER_PATH" "$BOOTSTRAP_COMPILER_DIGEST" \
+        "$BOOTSTRAP_LIB_ID" |
+        git --git-dir="$BOOTSTRAP_ID_GIT" hash-object --stdin
+) || die 'Loom build variant identity is unavailable'
+BOOTSTRAP_PREFIX=$BOOTSTRAP_CACHE/tiny/loom-bootstrap/$BOOTSTRAP_SOURCE_ID/$BOOTSTRAP_WORKTREE_ID
+BOOTSTRAP_SNAPSHOT=$BOOTSTRAP_PREFIX/source
+BOOTSTRAP_HELPER_CACHE=$BOOTSTRAP_PREFIX/helper-zig-cache
+mkdir -p -- "$BOOTSTRAP_PREFIX" || die 'Loom bootstrap prefix is unavailable'
+if [ ! -f "$BOOTSTRAP_SNAPSHOT/.loom-tree" ]; then
+    BOOTSTRAP_PRIVATE=$(mktemp -d "$BOOTSTRAP_PREFIX/.source.XXXXXX") ||
+        die 'Loom source snapshot scratch is unavailable'
+    git --git-dir="$BOOTSTRAP_ID_GIT" archive \
+        --output="$BOOTSTRAP_PRIVATE/archive.tar" "$BOOTSTRAP_SOURCE_ID" ||
+        die 'Loom source snapshot archive failed'
+    tar -xf "$BOOTSTRAP_PRIVATE/archive.tar" -C "$BOOTSTRAP_PRIVATE" ||
+        die 'Loom source snapshot extraction failed'
+    rm -- "$BOOTSTRAP_PRIVATE/archive.tar"
+    printf '%s\n' "$BOOTSTRAP_SOURCE_ID" >"$BOOTSTRAP_PRIVATE/.loom-tree"
+    env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+        git init --quiet "$BOOTSTRAP_PRIVATE" ||
+        die 'Loom source snapshot repository is unavailable'
+    GIT_INDEX_FILE=$BOOTSTRAP_PRIVATE/.git/index \
+        git -C "$BOOTSTRAP_PRIVATE" --git-dir="$BOOTSTRAP_PRIVATE/.git" \
+        --work-tree="$BOOTSTRAP_PRIVATE" add --all ||
+        die 'Loom source snapshot index is unavailable'
+    GIT_AUTHOR_DATE='2000-01-01T00:00:00Z' \
+        GIT_COMMITTER_DATE='2000-01-01T00:00:00Z' \
+        GIT_INDEX_FILE=$BOOTSTRAP_PRIVATE/.git/index \
+        git -C "$BOOTSTRAP_PRIVATE" --git-dir="$BOOTSTRAP_PRIVATE/.git" \
+        --work-tree="$BOOTSTRAP_PRIVATE" \
+        -c user.name=loom-bootstrap -c user.email=loom-bootstrap@invalid \
+        commit --quiet -m snapshot ||
+        die 'Loom source snapshot commit is unavailable'
+    if [ -d "$BOOTSTRAP_SNAPSHOT" ]; then
+        rm -rf -- "$BOOTSTRAP_PRIVATE"
+    else
+        mv -n -- "$BOOTSTRAP_PRIVATE" "$BOOTSTRAP_SNAPSHOT" ||
+            die 'Loom source snapshot publication failed'
+        # Concurrent mv implementations may put the loser inside the winner.
+        [ ! -d "$BOOTSTRAP_PRIVATE" ] || rm -rf -- "$BOOTSTRAP_PRIVATE"
+        nested=$BOOTSTRAP_SNAPSHOT/$(basename -- "$BOOTSTRAP_PRIVATE")
+        [ ! -d "$nested" ] || rm -rf -- "$nested"
+    fi
+fi
+[ "$(cat "$BOOTSTRAP_SNAPSHOT/.loom-tree" 2>/dev/null)" = "$BOOTSTRAP_SOURCE_ID" ] ||
+    die 'Loom source snapshot identity does not match its key'
+cleanup_bootstrap_id
+trap - 0 1 2 15
+XDG_CACHE_HOME=$BOOTSTRAP_CACHE
+export XDG_CACHE_HOME
+unset TINY_LOOM_BOOTSTRAP_SOURCE
+if [ "$TOOLS_SOURCE_FALLBACK" = 1 ] &&
+    [ "${TINY_LOOM_PUBLICATION_OBSERVER_FDS+x}" = x ]; then
+    TINY_LOOM_SOURCE_OBSERVATION_HANDOFF=1
+    export TINY_LOOM_SOURCE_OBSERVATION_HANDOFF
+fi
+
+if [ -n "$NATIVE_LOOM" ]; then
+    if [ "${TINY_LOOM_SOURCE_OBSERVATION_HANDOFF-}" = 1 ]; then
+        TINY_LOOM_BOOTSTRAP_DRIVER=1
+        export TINY_LOOM_BOOTSTRAP_DRIVER
+    fi
+    if [ -n "$LOOM_RESOLVE" ]; then
+        exec "$NATIVE_LOOM" cache bootstrap run --resolve \
+            --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+            --snapshot "$BOOTSTRAP_SNAPSHOT" \
+            --source "$BOOTSTRAP_SOURCE_ID" \
+            --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"
+    fi
+    exec "$NATIVE_LOOM" cache bootstrap run \
+        --fallback "$NATIVE_LOOM" \
+        --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+        --snapshot "$BOOTSTRAP_SNAPSHOT" \
+        --source "$BOOTSTRAP_SOURCE_ID" \
+        --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"
+fi
+
+BOOTSTRAP_HELPER=$BOOTSTRAP_PREFIX/bin/loom-bootstrap
+mkdir -p -- "$BOOTSTRAP_PREFIX/bin" || die 'Loom bootstrap prefix is unavailable'
+if command -v flock >/dev/null 2>&1; then
+    exec 8>"$BOOTSTRAP_PREFIX/.helper.lock"
+    helper_wait=0
+    while ! flock -n -x 8; do
+        if [ "$helper_wait" -ge 900 ]; then
+            helper_builder=$(cat "$BOOTSTRAP_PREFIX/.helper.pid" 2>/dev/null || printf unknown)
+            printf 'bootstrap build wait timed out builder_pid=%s elapsed=%ss\n' \
+                "$helper_builder" "$helper_wait" >&2
+            exit 75
+        fi
+        if [ "$helper_wait" -gt 0 ] && [ $((helper_wait % 30)) -eq 0 ]; then
+            helper_builder=$(cat "$BOOTSTRAP_PREFIX/.helper.pid" 2>/dev/null || printf unknown)
+            printf 'bootstrap build waiting builder_pid=%s elapsed=%ss\n' \
+                "$helper_builder" "$helper_wait" >&2
+        fi
+        sleep 1
+        helper_wait=$((helper_wait + 1))
+    done
+    printf '%s\n' "$$" >"$BOOTSTRAP_PREFIX/.helper.pid"
+fi
+if [ ! -x "$BOOTSTRAP_HELPER" ]; then
+    BOOTSTRAP_SEED=$(mktemp -d "$BOOTSTRAP_PREFIX/.helper.XXXXXX") ||
+        die 'Loom bootstrap helper scratch is unavailable'
+    cleanup_bootstrap_seed() {
+        rm -rf -- "$BOOTSTRAP_SEED"
+    }
+    trap cleanup_bootstrap_seed 0 1 2 15
+    (
+        cd -- "$BOOTSTRAP_SNAPSHOT/tools/loom"
+        unset TINY_ZIG_GENERATION_REQUEST TINY_ZIG_GENERATION_EVENTS
+        unset TINY_ZIG_GENERATION_SESSION TINY_ZIG_GENERATION_ROOT
+        ZIG_LOCAL_CACHE_DIR=$BOOTSTRAP_HELPER_CACHE \
+            ZIG_GLOBAL_CACHE_DIR=${ZIG_GLOBAL_CACHE_DIR:-$BOOTSTRAP_CACHE/zig} \
+            "$BOOTSTRAP_ZIG" build \
+            --build-file "$BOOTSTRAP_SNAPSHOT/tools/loom/build.zig" \
+            --seed=0 \
+            bootstrap-install \
+            --prefix "$BOOTSTRAP_SEED"
+    )
+    mv -n -- "$BOOTSTRAP_SEED/bin/loom-bootstrap" "$BOOTSTRAP_HELPER" ||
+        die 'Loom bootstrap helper publication failed'
+    cleanup_bootstrap_seed
+    trap - 0 1 2 15
+fi
+if command -v flock >/dev/null 2>&1; then
+    flock -u 8
+    exec 8>&-
+fi
+if [ -n "$LOOM_RESOLVE" ]; then
+    exec "$BOOTSTRAP_HELPER" run --resolve \
+        --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+        --snapshot "$BOOTSTRAP_SNAPSHOT" \
+        --source "$BOOTSTRAP_SOURCE_ID" \
+        --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"
+fi
+exec "$BOOTSTRAP_HELPER" run \
+    --root "$ROOT" --zig "$BOOTSTRAP_ZIG" \
+    --snapshot "$BOOTSTRAP_SNAPSHOT" \
+    --source "$BOOTSTRAP_SOURCE_ID" \
+    --worktree "$BOOTSTRAP_WORKTREE_ID" -- "$@"

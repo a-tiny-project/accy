@@ -1,0 +1,11 @@
+.{
+    .name = .target_transport_fixture,
+    .version = "26.7.0",
+    .fingerprint = 0x91e6792125985ae7,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "test.zig",
+    },
+}

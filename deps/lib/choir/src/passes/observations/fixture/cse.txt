@@ -1,0 +1,44 @@
+fixture cse_dominating_and_incomparable_blocks
+observation input-ir
+test.module() {
+  ^bb0(%0: !test.i32, %1: !test.i32, %2: !test.i32):
+    %3 = test.binary(%0, %1) : !test.i32
+    test.br() -> ^bb1, ^bb2
+  ^bb1:
+    %4 = test.binary(%0, %1) : !test.i32
+    %5 = test.binary(%1, %2) : !test.i32
+    test.br() -> ^bb3
+  ^bb2:
+    %6 = test.binary(%1, %2) : !test.i32
+    test.br() -> ^bb3
+  ^bb3:
+    test.return(%3)
+}
+observation pass-trace-and-ir-after-each-pass
+pipeline_begin depth=0 target=any operation=test.module failed=false
+pass_begin name=choir-cse scope=isolated target=test.module
+analysis_begin name=choir-dominance target=test.module
+analysis_begin name=choir-control-flow-graph target=test.module
+analysis_end name=choir-control-flow-graph target=test.module
+analysis_end name=choir-dominance target=test.module
+pass_end name=choir-cse modified=false
+ir-after-pass choir-cse
+test.module() {
+  ^bb0(%0: !test.i32, %1: !test.i32, %2: !test.i32):
+    %3 = test.binary(%0, %1) : !test.i32
+    test.br() -> ^bb1, ^bb2
+  ^bb1:
+    %4 = test.binary(%0, %1) : !test.i32
+    %5 = test.binary(%1, %2) : !test.i32
+    test.br() -> ^bb3
+  ^bb2:
+    %6 = test.binary(%1, %2) : !test.i32
+    test.br() -> ^bb3
+  ^bb3:
+    test.return(%3)
+}
+pipeline_end depth=0 target=any operation=test.module failed=false
+observation result
+success
+observation structured-diagnostics
+count=0

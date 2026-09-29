@@ -1,0 +1,11 @@
+pub const version = "1.25.0";
+pub const tag = "1.25.0";
+pub const url = "https://gitlab.freedesktop.org/wayland/wayland";
+pub const release_url = "https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.25.0/downloads/wayland-1.25.0.tar.xz";
+pub const archive_sha256 = "c065f040afdff3177680600f249727e41a1afc22fccf27222f15f5306faa1f03";
+pub const xml_sha256 = "08fb558d96742b41eab330c386f7b0c17d82169e69edad612ea89c17d6b1d53e";
+pub const license_sha256 = "6eefcb023622a463168a5c20add95fd24a38c7482622a9254a23b99b7c153061";
+pub const oracle_tool = "wayland-scanner";
+pub const oracle_version = "1.23.1";
+pub const oracle_output_sha256 = "602bff63b1e17fc74b8c9d5478363926521ba903daf589257c8a9a8eaf3c51a8";
+pub const oracle_signatures_sha256 = "719f5f726910d7240e541350f5ecc0bfbe6ea2e5f07e4b5951bfe2415802d807";

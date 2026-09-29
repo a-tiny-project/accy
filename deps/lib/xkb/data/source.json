@@ -1,0 +1,39 @@
+{
+  "upstream": "libxkbcommon",
+  "version": "1.13.2",
+  "tag": "xkbcommon-1.13.2",
+  "commit": "d1442aaa6b635551182e83c3b55037f4c118c962",
+  "url": "https://github.com/xkbcommon/libxkbcommon",
+  "xorgproto_commit": "fcb7e9a1a0b593a44740d83b0babddd331fea830",
+  "unicode_version": "17.0.0",
+  "files": {
+    "keysyms.h": {
+      "upstream_path": "include/xkbcommon/xkbcommon-keysyms.h",
+      "sha256": "13023369f65a17411606084e3e09557b4886aeb15f89affba4aaa86490a463f3"
+    },
+    "keysyms.yaml": {
+      "upstream_path": "data/keysyms.yaml",
+      "sha256": "1efdb5962ea3d7b81acb9b23b87b7af8258ebaea8efdc6a998e53e6ad623f7b3"
+    },
+    "case.c": {
+      "upstream_path": "src/keysym-case-mappings.c",
+      "sha256": "86e7f7a2faeb4e4132ec29e08d6a25b7fdce65ce88bb5b7403501961b226f000"
+    },
+    "unicode.c": {
+      "upstream_path": "src/keysym-utf.c",
+      "sha256": "a66da728a39b440535d9aa62cfc9a46410bd0e54d41d6190ce0aab91a8eee9ef"
+    },
+    "class.c": {
+      "upstream_path": "src/keysym.c",
+      "sha256": "123e3390d443b85c9cc9d1833c168ecda955d1c642fda03881052bb99c3369c5"
+    }
+  },
+  "counts": {
+    "names": 2638,
+    "keysyms": 2505,
+    "unicode": 1710,
+    "legacy_unicode": 763,
+    "lower": 2173,
+    "upper": 2739
+  }
+}

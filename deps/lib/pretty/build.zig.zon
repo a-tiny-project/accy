@@ -1,0 +1,22 @@
+.{
+    .name = .pretty,
+    .version = "26.6.2",
+    .fingerprint = 0x478ad1a08286c8d,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .build_api = .{ .path = "../../build/api" },
+        .pretty_core = .{ .path = "../pretty/core" },
+        .sys = .{
+            .path = "../sys",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "logo.svg",
+        "core",
+        "src",
+    },
+}

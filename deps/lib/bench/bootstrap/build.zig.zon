@@ -1,0 +1,15 @@
+.{
+    .name = .bench_bootstrap,
+    .fingerprint = 0x8b6e86a1a823485f,
+    .version = "26.6.2",
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../build/api" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

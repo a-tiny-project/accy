@@ -1,0 +1,21 @@
+.{
+    .name = .windowing,
+    .version = "26.6.2",
+    .fingerprint = 0x77a7411236db4d0d,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .build_api = .{ .path = "../../build/api" },
+        .alloc = .{ .path = "../alloc" },
+        .bench = .{ .path = "../bench" },
+        .hypothesis = .{ .path = "../hypothesis" },
+        .sys = .{ .path = "../sys" },
+        .wayland = .{ .path = "../wayland" },
+        .xkb = .{ .path = "../xkb" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

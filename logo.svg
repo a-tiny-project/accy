@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="147" viewBox="0 0 480 147" role="img" aria-label="accy: a walk on spheres terminating on the wordmark">
+  <style>
+    .ink-dark { display: none; }
+    @media (prefers-color-scheme: dark) {
+      .ink-light { display: none; }
+      .ink-dark { display: inline; }
+    }
+  </style>
+  <g class="ink-light" stroke="#1a1714" fill="#1a1714">
+    <path d="M128 30 L153.576 34.675 L177.916 38.36 L193.316 46.291 L202.211 55.465 L205.987 57.583" fill="none" stroke-width="1.1" stroke-dasharray="3 2.6"/>
+    <circle cx="128" cy="30" r="26" fill="none" stroke-width="1.5"/>
+    <circle cx="153.576" cy="34.675" r="24.617" fill="none" stroke-width="1.5"/>
+    <circle cx="177.916" cy="38.36" r="17.322" fill="none" stroke-width="1.5"/>
+    <circle cx="193.316" cy="46.291" r="12.778" fill="none" stroke-width="1.5"/>
+    <circle cx="202.211" cy="55.465" r="4.33" fill="none" stroke-width="1.5"/>
+    <circle cx="205.987" cy="57.583" r="5.4" fill="none" stroke-width="1.1"/>
+  </g>
+  <g class="ink-dark" stroke="#ece3d2" fill="#ece3d2">
+    <path d="M128 30 L153.576 34.675 L177.916 38.36 L193.316 46.291 L202.211 55.465 L205.987 57.583" fill="none" stroke-width="1.1" stroke-dasharray="3 2.6"/>
+    <circle cx="128" cy="30" r="26" fill="none" stroke-width="1.5"/>
+    <circle cx="153.576" cy="34.675" r="24.617" fill="none" stroke-width="1.5"/>
+    <circle cx="177.916" cy="38.36" r="17.322" fill="none" stroke-width="1.5"/>
+    <circle cx="193.316" cy="46.291" r="12.778" fill="none" stroke-width="1.5"/>
+    <circle cx="202.211" cy="55.465" r="4.33" fill="none" stroke-width="1.5"/>
+    <circle cx="205.987" cy="57.583" r="5.4" fill="none" stroke-width="1.1"/>
+  </g>
+  <g transform="translate(1.2 -0.8)" fill="#fb4934">
+    <path transform="translate(153.6 107.776) scale(0.096000 -0.096000)" d="M280 0H399V359C399 517 374 543 223 543C77 543 53 519 46 369H182C184 427 189 436 219 436C253 436 258 425 258 356V329H250C63 329 32 303 32 145C32 13 51 -9 169 -9C245 -9 260 1 276 61H280ZM258 236C254 128 246 111 204 111C177 111 173 118 173 164C173 226 180 236 224 236Z"/>
+    <path transform="translate(196.8 107.776) scale(0.096000 -0.096000)" d="M280 162C280 123 275 117 245 117C195 117 187 138 187 269C187 400 195 421 242 421C273 421 278 413 278 365H423C425 522 401 548 247 548C67 548 38 509 38 269C38 29 67 -10 248 -10C399 -10 423 14 423 162Z"/>
+    <path transform="translate(240 107.776) scale(0.096000 -0.096000)" d="M280 162C280 123 275 117 245 117C195 117 187 138 187 269C187 400 195 421 242 421C273 421 278 413 278 365H423C425 522 401 548 247 548C67 548 38 509 38 269C38 29 67 -10 248 -10C399 -10 423 14 423 162Z"/>
+    <path transform="translate(283.2 107.776) scale(0.096000 -0.096000)" d="M106 -221H244L448 538H298L230 176H225L162 538H15L152 33H174Z"/>
+    <circle cx="128" cy="30" r="2"/>
+    <circle cx="153.576" cy="34.675" r="2"/>
+    <circle cx="177.916" cy="38.36" r="2"/>
+    <circle cx="193.316" cy="46.291" r="2"/>
+    <circle cx="202.211" cy="55.465" r="2"/>
+    <circle cx="205.987" cy="57.583" r="2.8"/>
+  </g>
+</svg>

@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "test"
+  ],
+  "consumer_module": "accy",
+  "language": "zig",
+  "libraries": [],
+  "library": true,
+  "name": "accy",
+  "root": ".",
+  "version": "v26.9.0",
+  "zig": "0.17.0-dev.1465+8b2d0ce21",
+  "zig_claim_count": 0
+}

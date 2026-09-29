@@ -1,0 +1,40 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("indexed_vertex")} {
+      ^bb0:
+        %0 = gpu.vertex_index() : !arith.u32
+        %1 = gpu.instance_index() : !arith.u32
+        %2 = arith.cast(%0) : !arith.f32
+        %3 = arith.cast(%1) : !arith.f32
+        %4 = gpu.sampled_texture() {binding = 1:i64, group = 0:i64} : !gpu.sampled_texture
+        %5 = arith.constant() properties(0:f64) : !arith.f32
+        %6, %7, %8, %9 = gpu.sample_lod(%4, %2, %3, %5) : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        gpu.position(%2, %3, %6, %9)
+        gpu.stage_output(%1) {location = 0:i64}
+        gpu.stage_output(%7, %8) {location = 1:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("indexed_fragment")} {
+      ^bb0:
+        %10 = gpu.stage_input() {location = 0:i64} : !arith.u32
+        %11, %12 = gpu.stage_input() {location = 1:i64} : !arith.f32, !arith.f32
+        %13, %14, %15, %16 = gpu.frag_coord() : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %17 = gpu.front_facing() : !arith.bool
+        %18 = gpu.dpdx(%11) : !arith.f32
+        %19 = gpu.dpdy(%12) : !arith.f32
+        %20 = gpu.fwidth(%13) : !arith.f32
+        %21 = arith.select(%17, %18, %19) : !arith.f32
+        %22 = arith.add(%21, %20) : !arith.f32
+        %23 = arith.cast(%10) : !arith.f32
+        gpu.stage_output(%23, %22, %14, %16) {location = 0:i64}
+        scf.if(%17) {
+          ^bb0:
+            gpu.stage_output(%10) {location = 1:i64}
+            scf.yield()
+        } {
+          ^bb0:
+            scf.yield()
+        }
+        func.return()
+    }
+}

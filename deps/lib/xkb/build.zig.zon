@@ -1,0 +1,19 @@
+.{
+    .name = .xkb,
+    .version = "26.7.0",
+    .fingerprint = 0x801652e29075404a,
+    .minimum_zig_version = "0.17.0-dev.1465+8b2d0ce21",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../alloc/phase" },
+        .build_api = .{ .path = "../../build/api" },
+        .hypothesis = .{ .path = "../hypothesis" },
+        .sys = .{ .path = "../sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "data",
+        "src",
+    },
+}
