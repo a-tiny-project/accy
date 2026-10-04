@@ -1,0 +1,18 @@
+diff --git a/src/Compilation.zig b/src/Compilation.zig
+index ed5f8eda..9183d68e 100644
+--- a/src/Compilation.zig
++++ b/src/Compilation.zig
+@@ -6877,7 +6877,12 @@ pub fn addCCArgs(
+             for (xclang_flags) |xclang| {
+                 if (target_util.clangSupportsTargetCpuArg(target)) {
+                     if (target.cpu.model.llvm_name) |llvm_name| {
+-                        try argv.appendSlice(&[_][]const u8{
++                        // Clang's frontend rejects LLVM's x86 `generic` model, which its
++                        // assembler accepts. The features below still name that CPU.
++                        const frontend_rejects = target.cpu.arch.isX86() and
++                            std.mem.eql(u8, xclang, "-Xclang") and
++                            std.mem.eql(u8, llvm_name, "generic");
++                        if (!frontend_rejects) try argv.appendSlice(&[_][]const u8{
+                             xclang, "-target-cpu", xclang, llvm_name,
+                         });
+                     }

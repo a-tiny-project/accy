@@ -1,0 +1,12 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 1:i64, input_types = [!memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_exchange")} {
+      ^bb0(%0: !memref<?,arith.i32,device>):
+        %1 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %2 = arith.constant() properties(0:i64) : !arith.i32
+        %3 = arith.constant() properties(7:i64) : !arith.i32
+        %4 = memref.atomic_cas(%2, %3, %0, %1) : !arith.i32
+        memref.store(%4, %0, %1)
+        func.return()
+    }
+}

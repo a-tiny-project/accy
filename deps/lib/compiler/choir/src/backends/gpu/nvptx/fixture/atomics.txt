@@ -1,0 +1,22 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_atomics")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.i32,device>):
+        %2 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %3 = arith.constant() properties(1.5:f64) : !arith.f32
+        %4 = arith.constant() properties(0:i64) : !arith.i32
+        %5 = arith.constant() properties(1:i64) : !arith.i32
+        %6 = arith.constant() properties(3:i64) : !arith.i32
+        %7 = memref.atomic_rmw(%3, %0, %2) {kind = #attr<memref.atomic_kind>("add")} : !arith.f32
+        %8 = memref.atomic_rmw(%5, %1, %2) {kind = #attr<memref.atomic_kind>("add")} : !arith.i32
+        %9 = memref.atomic_rmw(%8, %1, %2) {kind = #attr<memref.atomic_kind>("min")} : !arith.i32
+        %10 = memref.atomic_rmw(%9, %1, %2) {kind = #attr<memref.atomic_kind>("max")} : !arith.i32
+        %11 = memref.atomic_rmw(%10, %1, %2) {kind = #attr<memref.atomic_kind>("bit_and")} : !arith.i32
+        %12 = memref.atomic_rmw(%11, %1, %2) {kind = #attr<memref.atomic_kind>("bit_or")} : !arith.i32
+        %13 = memref.atomic_rmw(%12, %1, %2) {kind = #attr<memref.atomic_kind>("bit_xor")} : !arith.i32
+        %14 = memref.atomic_cas(%4, %6, %1, %2) : !arith.i32
+        %15 = memref.atomic_rmw(%13, %1, %2) {kind = #attr<memref.atomic_kind>("exchange")} : !arith.i32
+        %16 = memref.atomic_rmw(%5, %1, %2) {kind = #attr<memref.atomic_kind>("bit_or")} : !arith.i32
+        func.return()
+    }
+}

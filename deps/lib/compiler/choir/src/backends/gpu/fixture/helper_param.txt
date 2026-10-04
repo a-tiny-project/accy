@@ -1,0 +1,28 @@
+builtin.module() {
+  ^bb0:
+    %0 = func.func() {input_count = 1:i64, input_types = [!memref<1,arith.f32,local>], input_types_text = "!memref<1,arith.f32,local>", sym_name = #attr<func.sym_name>("read_material")} : !arith.f32 {
+      ^bb0(%1: !memref<1,arith.f32,local>):
+        %2 = arith.constant() properties(0:i64) : !arith.index
+        %3 = memref.load(%1, %2) : !arith.f32
+        func.return(%3)
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("helper_vertex")} {
+      ^bb0:
+        %4, %5, %6 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %7, %8, %9, %10 = gpu.stage_input() {location = 2:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %11 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.position(%4, %5, %6, %11)
+        gpu.stage_output(%7, %8, %9, %10) {location = 0:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("helper_fragment")} {
+      ^bb0:
+        %12, %13, %14, %15 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %16 = arith.constant() properties(0:i64) : !arith.index
+        %17 = memref.alloca() : !memref<1,arith.f32,local>
+        memref.store(%12, %17, %16)
+        %18 = func.call(%17) {callee = @read_material} : !arith.f32
+        gpu.stage_output(%18, %13, %14, %15) {location = 0:i64}
+        func.return()
+    }
+}

@@ -1,0 +1,57 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("gradient_vertex")} {
+      ^bb0:
+        %0, %1, %2 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %3, %4 = gpu.stage_input() {location = 1:i64} : !arith.f32, !arith.f32
+        %5 = arith.mul(%0, %4) : !arith.f32
+        %6 = arith.mul(%1, %4) : !arith.f32
+        %7 = arith.mul(%2, %4) : !arith.f32
+        gpu.position(%5, %6, %7, %4)
+        gpu.stage_output(%3) {location = 0:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("gradient_fragment")} {
+      ^bb0:
+        %8 = gpu.stage_input() {location = 0:i64} : !arith.f32
+        %9, %10, %11, %12 = gpu.frag_coord() : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %13 = arith.mul(%9, %10) : !arith.f32
+        %14 = arith.constant() properties(0.015625:f64) : !arith.f32
+        %15 = arith.mul(%13, %14) : !arith.f32
+        %16 = gpu.dpdx(%15) : !arith.f32
+        %17 = gpu.dpdy(%15) : !arith.f32
+        %18 = gpu.dpdx(%8) : !arith.f32
+        %19 = gpu.fwidth(%8) : !arith.f32
+        gpu.stage_output(%16, %17, %18, %19) {location = 0:i64}
+        func.return()
+    }
+    %20 = func.func() {input_count = 1:i64, input_types = [!arith.f32], input_types_text = "!arith.f32", sym_name = #attr<func.sym_name>("gradient_scaled")} : !arith.f32 {
+      ^bb0(%21: !arith.f32):
+        %22 = arith.constant() properties(0.015625:f64) : !arith.f32
+        %23 = arith.mul(%21, %22) : !arith.f32
+        func.return(%23)
+    }
+    %24 = func.func() {input_count = 1:i64, input_types = [!arith.f32], input_types_text = "!arith.f32", sym_name = #attr<func.sym_name>("gradient_twice")} : !arith.f32 {
+      ^bb0(%25: !arith.f32):
+        %26 = arith.add(%25, %25) : !arith.f32
+        %27 = arith.constant() properties(0:i64) : !arith.index
+        %28 = memref.alloca() : !memref<1,arith.f32,local>
+        memref.store(%26, %28, %27)
+        %29 = memref.load(%28, %27) : !arith.f32
+        func.return(%29)
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("gradient_call_fragment")} {
+      ^bb0:
+        %30 = gpu.stage_input() {location = 0:i64} : !arith.f32
+        %31, %32, %33, %34 = gpu.frag_coord() : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %35 = arith.mul(%31, %32) : !arith.f32
+        %36 = func.call(%35) {callee = @gradient_scaled} : !arith.f32
+        %37 = gpu.dpdx(%36) : !arith.f32
+        %38 = gpu.dpdy(%36) : !arith.f32
+        %39 = func.call(%30) {callee = @gradient_twice} : !arith.f32
+        %40 = gpu.dpdx(%39) : !arith.f32
+        %41 = gpu.fwidth(%39) : !arith.f32
+        gpu.stage_output(%37, %38, %40, %41) {location = 0:i64}
+        func.return()
+    }
+}

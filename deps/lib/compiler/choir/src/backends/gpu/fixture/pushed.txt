@@ -1,0 +1,39 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("pushed_vertex")} {
+      ^bb0:
+        %0, %1, %2 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %3, %4, %5, %6 = gpu.stage_input() {location = 2:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %7, %8 = gpu.push_constant() {offset = 0:i64} : !arith.f32, !arith.f32
+        %9 = gpu.push_constant() {offset = 8:i64} : !arith.f32
+        %10 = arith.mul(%0, %9) : !arith.f32
+        %11 = arith.add(%10, %7) : !arith.f32
+        %12 = arith.mul(%1, %9) : !arith.f32
+        %13 = arith.add(%12, %8) : !arith.f32
+        %14 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.position(%11, %13, %2, %14)
+        gpu.stage_output(%3, %4, %5, %6) {location = 0:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("pushed_fragment")} {
+      ^bb0:
+        %15, %16, %17, %18 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %19, %20, %21 = gpu.uniform() {binding = 1:i64, group = 0:i64, offset = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %22 = gpu.uniform() {binding = 1:i64, group = 0:i64, offset = 12:i64} : !arith.f32
+        %23, %24, %25, %26 = gpu.uniform() {binding = 1:i64, group = 0:i64, offset = 16:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %27 = gpu.push_constant() {offset = 12:i64} : !arith.f32
+        %28 = arith.mul(%19, %23) : !arith.f32
+        %29 = arith.mul(%20, %24) : !arith.f32
+        %30 = arith.mul(%21, %25) : !arith.f32
+        %31 = arith.mul(%22, %26) : !arith.f32
+        %32 = arith.mul(%28, %15) : !arith.f32
+        %33 = arith.mul(%29, %16) : !arith.f32
+        %34 = arith.mul(%30, %17) : !arith.f32
+        %35 = arith.mul(%31, %18) : !arith.f32
+        %36 = arith.mul(%32, %27) : !arith.f32
+        %37 = arith.mul(%33, %27) : !arith.f32
+        %38 = arith.mul(%34, %27) : !arith.f32
+        gpu.stage_output(%36, %37, %38, %35) {location = 0:i64}
+        func.return()
+    }
+}

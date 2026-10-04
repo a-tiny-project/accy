@@ -1,0 +1,12 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_warp")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>):
+        %2 = gpu.lane_id() : !arith.index
+        %3 = memref.load(%1, %2) : !arith.f32
+        %4 = arith.constant() properties(-1:i64) : !arith.i32
+        %5 = gpu.warp_reduce(%4, %3) {op = #attr<gpu.warp_op>("add")} : !arith.f32
+        memref.store(%5, %0, %2)
+        func.return()
+    }
+}

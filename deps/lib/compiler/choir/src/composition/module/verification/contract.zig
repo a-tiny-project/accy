@@ -1,0 +1,33 @@
+const source = @import("../../source/root.zig");
+
+pub const Error = source.VerificationError ||
+    @import("../../../product/root.zig").ProductMetadataError || error{
+    AbiMismatch,
+    ConflictingProductKey,
+    DuplicateCallSite,
+    DuplicateExport,
+    DuplicateFragment,
+    DuplicateImport,
+    DuplicatePartitionFragment,
+    DuplicateCompositionVariant,
+    DuplicateTargetChoice,
+    EmptyArtifact,
+    EmptyExport,
+    EmptyImport,
+    EmptyPolicyIdentity,
+    EmptyTargetIdentity,
+    FragmentOutsideVariant,
+    MissingArtifact,
+    MissingExport,
+    MissingFragment,
+    MissingImport,
+    MissingPartitionFragment,
+    MissingCompositionVariant,
+    MissingProvidedSymbol,
+    MissingRequiredSymbol,
+    MissingSemanticCallSite,
+    RuntimeSymbolMismatch,
+    SemanticCallSiteMismatch,
+    TooManyResources,
+    UnreferencedFragment,
+};

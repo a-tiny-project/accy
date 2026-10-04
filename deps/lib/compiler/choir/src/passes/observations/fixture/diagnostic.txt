@@ -1,0 +1,32 @@
+fixture verifier_yield_type_diagnostic
+observation input-ir
+builtin.module() {
+  ^bb0(%0: !arith.index):
+    %1 = arith.constant() {value = 0:f64} : !arith.f64
+    %2 = scf.for(%0, %0, %0, %1) : !arith.f64 {
+      ^bb0(%3: !arith.index, %4: !arith.f64):
+        scf.yield(%0)
+    }
+}
+observation pass-trace-and-ir-after-each-pass
+pipeline_begin depth=0 target=any operation=builtin.module failed=false
+pass_begin name=choir-cse scope=isolated target=builtin.module
+pass_end name=choir-cse modified=false
+ir-after-pass choir-cse
+builtin.module() {
+  ^bb0(%0: !arith.index):
+    %1 = arith.constant() {value = 0:f64} : !arith.f64
+    %2 = scf.for(%0, %0, %0, %1) : !arith.f64 {
+      ^bb0(%3: !arith.index, %4: !arith.f64):
+        scf.yield(%0)
+    }
+}
+pipeline_end depth=0 target=any operation=builtin.module failed=true
+observation result
+failure
+observation structured-diagnostics
+count=1
+diagnostic[0] severity=err location=loc("wrong-yield.choir":4:5-4:47@105..147) operation=scf.for error=ScfForYieldTypeMismatch
+message=Choir verifier failed
+notes=0
+metadata=0

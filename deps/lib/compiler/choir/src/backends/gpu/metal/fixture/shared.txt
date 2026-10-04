@@ -1,0 +1,17 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 1:i64, input_types = [!memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_shared")} {
+      ^bb0(%0: !memref<?,arith.i32,device>):
+        %1 = memref.alloc() : !memref<16,arith.i32,shared>
+        %2 = arith.constant() properties(0:i64) : !arith.index
+        %3 = arith.constant() properties(0:i64) : !arith.i32
+        %4 = arith.constant() properties(1:i64) : !arith.i32
+        memref.store(%3, %1, %2)
+        gpu.barrier() {scope = #attr<gpu.scope>("block")}
+        %5 = memref.atomic_rmw(%4, %1, %2) {kind = #attr<memref.atomic_kind>("add")} : !arith.i32
+        gpu.barrier() {scope = #attr<gpu.scope>("block")}
+        %6 = memref.load(%1, %2) : !arith.i32
+        memref.store(%6, %0, %2)
+        func.return()
+    }
+}

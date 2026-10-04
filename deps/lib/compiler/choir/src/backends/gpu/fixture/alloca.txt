@@ -1,0 +1,36 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("alloca_vertex")} {
+      ^bb0:
+        %0, %1, %2 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %3, %4, %5, %6 = gpu.stage_input() {location = 2:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %7 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.position(%0, %1, %2, %7)
+        gpu.stage_output(%3, %4, %5, %6) {location = 0:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("alloca_fragment")} {
+      ^bb0:
+        %8, %9, %10, %11 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %12 = arith.constant() properties(0:i64) : !arith.index
+        %13 = arith.constant() properties(1:i64) : !arith.index
+        %14 = arith.constant() properties(2:i64) : !arith.index
+        %15 = arith.constant() properties(3:i64) : !arith.index
+        %16 = memref.alloca() : !memref<4,arith.f32,local>
+        memref.store(%8, %16, %12)
+        memref.store(%9, %16, %13)
+        memref.store(%10, %16, %14)
+        memref.store(%11, %16, %15)
+        %17 = memref.load(%16, %12) : !arith.f32
+        %18 = memref.load(%16, %13) : !arith.f32
+        %19 = memref.load(%16, %14) : !arith.f32
+        %20 = memref.load(%16, %15) : !arith.f32
+        %21 = memref.alloca() : !memref<1,arith.bool,local>
+        %22 = arith.constant() properties(true) : !arith.bool
+        memref.store(%22, %21, %12)
+        %23 = memref.load(%21, %12) : !arith.bool
+        %24 = arith.select(%23, %20, %17) : !arith.f32
+        gpu.stage_output(%17, %18, %19, %24) {location = 0:i64}
+        func.return()
+    }
+}

@@ -1,0 +1,39 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 4:i64, input_types = [!memref<?,arith.f32,device>, !memref<?,arith.f32,device>, !memref<?,arith.f64,device>, !memref<?,arith.i32,device>], input_types_text = "!memref<?,arith.f32,device>,!memref<?,arith.f32,device>,!memref<?,arith.f64,device>,!memref<?,arith.i32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("test_compare")} {
+      ^bb0(%0: !memref<?,arith.f32,device>, %1: !memref<?,arith.f32,device>, %2: !memref<?,arith.f64,device>, %3: !memref<?,arith.i32,device>):
+        %4 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %5 = memref.load(%1, %4) : !arith.f32
+        %6 = arith.cmp(%5, %5) {predicate = #attr<arith.predicate>("ne")} : !arith.bool
+        scf.if(%6) {
+          ^bb0:
+            memref.store(%5, %0, %4)
+            scf.yield()
+        } {
+          ^bb0:
+            scf.yield()
+        }
+        %7 = memref.load(%2, %4) : !arith.f64
+        %8 = arith.cmp(%7, %7) {predicate = #attr<arith.predicate>("ne")} : !arith.bool
+        scf.if(%8) {
+          ^bb0:
+            memref.store(%5, %0, %4)
+            scf.yield()
+        } {
+          ^bb0:
+            scf.yield()
+        }
+        %9 = memref.load(%3, %4) : !arith.i32
+        %10 = arith.constant() properties(0:i64) : !arith.i32
+        %11 = arith.cmp(%9, %10) {predicate = #attr<arith.predicate>("ne")} : !arith.bool
+        scf.if(%11) {
+          ^bb0:
+            memref.store(%5, %0, %4)
+            scf.yield()
+        } {
+          ^bb0:
+            scf.yield()
+        }
+        func.return()
+    }
+}

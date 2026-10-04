@@ -1,0 +1,44 @@
+diff --git a/src/codegen/llvm.zig b/src/codegen/llvm.zig
+index a8adfba6..8abf9236 100644
+--- a/src/codegen/llvm.zig
++++ b/src/codegen/llvm.zig
+@@ -2914,6 +2914,8 @@ pub const Object = struct {
+ 
+                         offset += field_ty.abiSize(zcu);
+                     }
++                    // A lowered LLVM type's natural alignment never exceeds its Zig ABI alignment.
++                    if (struct_type.alignment.compare(.lt, max_field_ty_align)) struct_kind = .@"packed";
+                     {
+                         const prev_offset = offset;
+                         offset = struct_type.alignment.forward(offset);
+@@ -3001,6 +3003,12 @@ pub const Object = struct {
+ 
+                     const aligned_field_ty = Type.fromInterned(union_obj.field_types.get(ip)[layout.most_aligned_field]);
+                     const aligned_field_llvm_ty = try o.lowerType(aligned_field_ty, repr);
++                    // A lowered LLVM type's natural alignment never exceeds its Zig ABI alignment.
++                    const struct_kind: Builder.Type.Structure.Kind =
++                        if (aligned_field_ty.abiAlignment(zcu).compare(.gt, layout.payload_align))
++                            .@"packed"
++                        else
++                            .normal;
+ 
+                     const payload_ty = ty: {
+                         if (layout.most_aligned_field_size == layout.payload_size) {
+@@ -3022,7 +3030,7 @@ pub const Object = struct {
+ 
+                         o.builder.namedTypeSetBody(
+                             ty,
+-                            try o.builder.structType(.normal, &.{payload_ty}),
++                            try o.builder.structType(struct_kind, &.{payload_ty}),
+                         );
+                         return ty;
+                     }
+@@ -3050,7 +3058,7 @@ pub const Object = struct {
+ 
+                     o.builder.namedTypeSetBody(
+                         ty,
+-                        try o.builder.structType(.normal, llvm_fields[0..llvm_fields_len]),
++                        try o.builder.structType(struct_kind, llvm_fields[0..llvm_fields_len]),
+                     );
+                     return ty;
+                 },

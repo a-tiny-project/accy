@@ -1,0 +1,24 @@
+builtin.module() {
+  ^bb0:
+    %0 = func.func() {input_count = 0:i64, input_types = [], input_types_text = "", sym_name = #attr<func.sym_name>("borrow")} : !memref<1,arith.f32,local> {
+      ^bb0:
+        %1 = memref.alloca() : !memref<1,arith.f32,local>
+        func.return(%1)
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("vertex"), sym_name = #attr<func.sym_name>("helper_vertex")} {
+      ^bb0:
+        %2, %3, %4 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32
+        %5, %6, %7, %8 = gpu.stage_input() {location = 2:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %9 = arith.constant() properties(1:f64) : !arith.f32
+        gpu.position(%2, %3, %4, %9)
+        gpu.stage_output(%5, %6, %7, %8) {location = 0:i64}
+        func.return()
+    }
+    func.func() {input_count = 0:i64, input_types = [], input_types_text = "", stage = #attr<gpu.stage>("fragment"), sym_name = #attr<func.sym_name>("helper_fragment")} {
+      ^bb0:
+        %10, %11, %12, %13 = gpu.stage_input() {location = 0:i64} : !arith.f32, !arith.f32, !arith.f32, !arith.f32
+        %14 = func.call() {callee = @borrow} : !memref<1,arith.f32,local>
+        gpu.stage_output(%10, %11, %12, %13) {location = 0:i64}
+        func.return()
+    }
+}

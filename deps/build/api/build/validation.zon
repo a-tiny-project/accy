@@ -1,0 +1,16 @@
+.{
+    .owner = "build/api",
+    .required = .{"build-api.test"},
+    .recipes = .{.{
+        .id = "build-api.test",
+        .step = "test",
+        .child_zig_cache = "/tmp/zig-child",
+        .jobs = 1,
+        .suites = .{.{
+            .id = "build-api-check",
+            .backend = "native",
+            .selection_artifact = "build-api-check.selection.json",
+            .result_artifact = "build-api-check.result.json",
+        }},
+    }},
+}

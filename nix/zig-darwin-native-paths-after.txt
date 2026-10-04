@@ -1,0 +1,6 @@
+        // Trigger native system library path detection if necessary.
+        if (create_module.sysroot == null and
+            ((resolved_target.is_native_os and resolved_target.is_native_abi) or
+                (native_os.isDarwin() and target.os.tag == native_os)) and
+            create_module.want_native_include_dirs)
+        {

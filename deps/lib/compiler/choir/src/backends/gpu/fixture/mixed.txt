@@ -1,0 +1,30 @@
+builtin.module() {
+  ^bb0:
+    func.func() {input_count = 1:i64, input_types = [!memref<?,arith.u32,device>], input_types_text = "!memref<?,arith.u32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("shape_square"), workgroup_size = #attr<gpu.workgroup_size>("8x8x1")} {
+      ^bb0(%0: !memref<?,arith.u32,device>):
+        %1 = gpu.thread_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %2 = gpu.thread_idx() {dim = #attr<gpu.dim>("y")} : !arith.index
+        %3 = gpu.block_dim() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %4 = gpu.block_dim() {dim = #attr<gpu.dim>("y")} : !arith.index
+        %5 = gpu.block_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %6 = gpu.block_idx() {dim = #attr<gpu.dim>("y")} : !arith.index
+        %7 = gpu.grid_dim() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %8 = arith.mul(%2, %3) : !arith.index
+        %9 = arith.add(%8, %1) : !arith.index
+        %10 = arith.mul(%6, %7) : !arith.index
+        %11 = arith.add(%10, %5) : !arith.index
+        %12 = arith.mul(%3, %4) : !arith.index
+        %13 = arith.mul(%11, %12) : !arith.index
+        %14 = arith.add(%13, %9) : !arith.index
+        %15 = arith.cast(%9) : !arith.u32
+        memref.store(%15, %0, %14)
+        func.return()
+    }
+    func.func() {input_count = 2:i64, input_types = [!memref<?,arith.u32,device>, !memref<?,arith.u32,device>], input_types_text = "!memref<?,arith.u32,device>,!memref<?,arith.u32,device>", kernel = #attr<func.kernel>, sym_name = #attr<func.sym_name>("unshaped_copy")} {
+      ^bb0(%16: !memref<?,arith.u32,device>, %17: !memref<?,arith.u32,device>):
+        %18 = gpu.global_idx() {dim = #attr<gpu.dim>("x")} : !arith.index
+        %19 = memref.load(%16, %18) : !arith.u32
+        memref.store(%19, %17, %18)
+        func.return()
+    }
+}

@@ -1,0 +1,26 @@
+.{
+    // These recipes do not build SMG. A missing path makes accidental grammar use fail loudly.
+    .root_options = .{
+        "-Dtree-sitter-zig-source=/nonexistent/smg-grammars-not-built",
+        "-Dtree-sitter-javascript-source=/nonexistent/smg-grammars-not-built",
+        "-Dtree-sitter-typescript-source=/nonexistent/smg-grammars-not-built",
+        "-Dtree-sitter-c-source=/nonexistent/smg-grammars-not-built",
+        "-Dtree-sitter-cpp-source=/nonexistent/smg-grammars-not-built",
+    },
+    .owners = .{
+        .{
+            .path = "build/packages",
+            .id = "build-packages.test",
+            .step = "package-registry-test",
+            .suite = "build-packages-check",
+            .dependencies = .root_manifest,
+        },
+        .{
+            .path = "build/tools/package",
+            .id = "build-tools-package.test",
+            .step = "tool-catalog-test",
+            .suite = "build-tools-package-check",
+            .dependencies = .tool_catalog,
+        },
+    },
+}

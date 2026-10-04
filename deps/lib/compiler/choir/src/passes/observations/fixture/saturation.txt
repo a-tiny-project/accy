@@ -1,0 +1,26 @@
+fixture saturation_identity_extraction
+observation input-ir
+test.module() {
+  ^bb0:
+    %0 = test.constant() {value = #attr<test.int>("7")} : !test.i64
+    %1 = test.constant() {value = #attr<test.int>("2")} : !test.i64
+    %2 = test.binary(%0, %1) : !test.i64
+    test.return(%2)
+}
+observation pass-trace-and-ir-after-each-pass
+pipeline_begin depth=0 target=any operation=test.module failed=false
+pass_begin name=choir-egraph-reduction-test scope=isolated target=test.module
+pass_end name=choir-egraph-reduction-test modified=false
+ir-after-pass choir-egraph-reduction-test
+test.module() {
+  ^bb0:
+    %0 = test.constant() {value = #attr<test.int>("7")} : !test.i64
+    %1 = test.constant() {value = #attr<test.int>("2")} : !test.i64
+    %2 = test.binary(%0, %1) : !test.i64
+    test.return(%2)
+}
+pipeline_end depth=0 target=any operation=test.module failed=false
+observation result
+success
+observation structured-diagnostics
+count=0
