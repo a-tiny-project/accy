@@ -1,0 +1,4 @@
+ordinary_max_slots=12
+heavy_max_slots=8
+max_cpu_tokens=64
+max_resource_fds=89

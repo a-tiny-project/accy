@@ -1,0 +1,29 @@
+pub const execution = @import("execution.zig");
+const model = @import("../model/program/root.zig");
+
+pub const graph = model.graph;
+pub const guard = model.guard;
+pub const parameter = model.parameter;
+
+pub const Index1D = execution.Index1D;
+pub const VectorIndex1D = execution.VectorIndex1D;
+pub const DomainAxis = execution.DomainAxis;
+pub const Domain2D = execution.Domain2D;
+pub const Domain3D = execution.Domain3D;
+pub const Index2D = execution.Index2D;
+pub const Index3D = execution.Index3D;
+pub const Vec2 = execution.Vec2;
+pub const Vec3 = execution.Vec3;
+pub const TypedValue = execution.TypedValue;
+pub const TypedVec2 = execution.TypedVec2;
+pub const TypedVec3 = execution.TypedVec3;
+pub const product_name = model.product_name;
+pub const domainAxis = execution.domainAxis;
+pub const BufferView = execution.BufferView;
+pub const Program = execution.Program;
+pub const Builder = execution.Builder;
+pub const Limits = execution.Limits;
+pub const Capacity = execution.Capacity;
+pub const Guard = execution.Guard;
+pub const define = execution.define;
+pub const defineWithDiagnostic = execution.defineWithDiagnostic;

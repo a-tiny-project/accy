@@ -1,0 +1,45 @@
+const product_mod = @import("../model/root.zig");
+pub const common = @import("common.zig");
+pub const elementwise = @import("elementwise.zig");
+pub const shape_lowering = @import("shape.zig");
+pub const dot = @import("dot.zig");
+pub const reduction = @import("reduction.zig");
+pub const row_pipeline = @import("row.zig");
+pub const iterate_lowering = @import("iterate.zig");
+pub const flash_attention = @import("flash.zig");
+pub const scan_lowering = @import("scan.zig");
+pub const schedule = @import("schedule.zig");
+pub const builder = @import("builder.zig");
+pub const abi = @import("abi.zig");
+pub const name = @import("name.zig");
+pub const work = @import("work.zig");
+pub const pass = @import("pass.zig");
+
+pub const ElementwiseKernel = product_mod.ElementwiseKernel;
+pub const ShapeKernel = product_mod.ShapeKernel;
+pub const LoweredKernel = product_mod.LoweredKernel;
+pub const KernelizationAnalysis = product_mod.KernelizationAnalysis;
+pub const DotGeneralStaticDims = product_mod.DotGeneralStaticDims;
+pub const DotGeneralDescription = product_mod.DotGeneralDescription;
+pub const ReductionStaticDims = product_mod.ReductionStaticDims;
+pub const ReductionKind = product_mod.ReductionKind;
+pub const ReductionDescription = product_mod.ReductionDescription;
+
+pub const dotGeneralDescriptionForWork = dot.dotGeneralDescriptionForWork;
+pub const reductionDescriptionForWork = reduction.reductionDescriptionForWork;
+pub const elementwiseKernelForOperation = elementwise.kernelForOperation;
+pub const shapeKernelForOperation = shape_lowering.kernelForOperation;
+pub const expectedInputCount = elementwise.expectedInputCount;
+pub const generated_scan_schedule_version = scan_lowering.schedule_version;
+pub const max_scan_schedule_candidates = scan_lowering.max_schedule_candidates;
+pub const scanScheduleCandidates = scan_lowering.scheduleCandidates;
+pub const generated_row_pipeline_schedule_version = row_pipeline.schedule_version;
+pub const max_row_pipeline_schedule_candidates = row_pipeline.max_schedule_candidates;
+pub const rowPipelineScheduleCandidates = row_pipeline.scheduleCandidates;
+
+pub const kernelization_analysis_name = pass.kernelization_analysis_name;
+pub const kernelization_pass_name = pass.kernelization_pass_name;
+pub const kernelization_pass_description = pass.kernelization_pass_description;
+pub const kernelization_analysis_descriptor = pass.kernelization_analysis_descriptor;
+pub const getKernelizationAnalysis = pass.getKernelizationAnalysis;
+pub const kernelizationPass = pass.kernelizationPass;

@@ -1,0 +1,17 @@
+.{
+    .name = .coz,
+    .version = "26.6.2",
+    .fingerprint = 0xe7654321957c30bc,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../build/api" },
+        .pretty_core = .{ .path = "../../base/pretty/core" },
+        .sys = .{ .path = "../../base/sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "src",
+    },
+}

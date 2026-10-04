@@ -1,0 +1,13 @@
+const gpu_abi = @import("gpu_abi");
+pub const core = @import("../../../core/root.zig");
+pub const builder = core.builder;
+pub const domain = core.domain;
+pub const typed = core.typed;
+pub const view = core.view;
+pub const DType = gpu_abi.DType;
+pub const Vec2 = domain.Vec2;
+pub const Vec3 = domain.Vec3;
+pub const TypedValue = typed.Value;
+pub const TypedVec2 = typed.Vec2;
+pub const TypedVec3 = typed.Vec3;
+pub const BufferView = view.BufferView;

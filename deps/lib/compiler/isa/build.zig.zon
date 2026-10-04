@@ -1,0 +1,17 @@
+.{
+    .name = .isa,
+    .version = "26.8.5",
+    .fingerprint = 0x86e052467aec54ad,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../build/api" },
+    },
+    .paths = .{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "logo.svg",
+        "src",
+    },
+}

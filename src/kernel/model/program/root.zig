@@ -1,0 +1,31 @@
+const generated = @import("generated.zig");
+const graph_mod = @import("graph/root.zig");
+const surface_factory = @import("builder/surface/root.zig");
+
+pub const graph = graph_mod;
+pub const guard = @import("guard/root.zig");
+pub const parameter = @import("parameter.zig");
+pub const Surface = surface_factory.Surface;
+
+pub const Index1D = generated.Index1D;
+pub const VectorIndex1D = generated.VectorIndex1D;
+pub const DomainAxis = generated.DomainAxis;
+pub const Domain2D = generated.Domain2D;
+pub const Domain3D = generated.Domain3D;
+pub const Index2D = generated.Index2D;
+pub const Index3D = generated.Index3D;
+pub const Vec2 = generated.Vec2;
+pub const Vec3 = generated.Vec3;
+pub const TypedValue = generated.TypedValue;
+pub const TypedVec2 = generated.TypedVec2;
+pub const TypedVec3 = generated.TypedVec3;
+pub const product_name = graph_mod.product_name;
+pub const domainAxis = generated.domainAxis;
+pub const BufferView = generated.BufferView;
+pub const Program = generated.Program;
+pub const Builder = generated.Builder;
+pub const Limits = generated.Limits;
+pub const Capacity = generated.Capacity;
+pub const Guard = generated.Guard;
+pub const define = generated.define;
+pub const defineWithDiagnostic = generated.defineWithDiagnostic;

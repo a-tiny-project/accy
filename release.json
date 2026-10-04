@@ -1,0 +1,26 @@
+{
+  "checks": [],
+  "consumer_module": "accy",
+  "examples": [
+    {
+      "root": "examples/consumer",
+      "steps": [
+        "run",
+        "test"
+      ]
+    }
+  ],
+  "language": "zig",
+  "libraries": [],
+  "library": true,
+  "name": "accy",
+  "root": ".",
+  "systems": [
+    "x86_64-linux",
+    "aarch64-darwin"
+  ],
+  "version": "v26.10.1",
+  "zig": "0.17.0",
+  "zig_claim_count": 0,
+  "zig_compiler": "zig"
+}

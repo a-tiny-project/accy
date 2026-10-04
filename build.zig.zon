@@ -1,0 +1,31 @@
+.{
+    .name = .accy,
+    .version = "26.10.1",
+    .fingerprint = 0x8f46cbffe2aec62b,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .alloc_fixed = .{ .path = "deps/lib/base/alloc/fixed" },
+        .build_api = .{ .path = "deps/build/api" },
+        .choir = .{
+            .path = "deps/lib/compiler/choir",
+        },
+        .gpu = .{
+            .path = "deps/lib/compiler/gpu",
+        },
+        .sys = .{
+            .path = "deps/lib/base/sys",
+        },
+        .pretty_core = .{
+            .path = "deps/lib/base/pretty/core",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "logo.svg",
+        "build",
+        "src",
+        "deps",
+        "LICENSE",
+    },
+}

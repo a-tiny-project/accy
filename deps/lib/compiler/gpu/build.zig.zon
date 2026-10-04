@@ -1,0 +1,20 @@
+.{
+    .name = .gpu,
+    .version = "26.7.0",
+    .fingerprint = 0xbd89f8f2fc8fb9bf,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .build_api = .{ .path = "../../../build/api" },
+        .gpu_abi = .{ .path = "../../compiler/gpu/abi" },
+        .pretty_core = .{ .path = "../../base/pretty/core" },
+        .sys = .{ .path = "../../base/sys" },
+        .tldr = .{ .path = "../../compiler/tldr" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "logo.svg",
+        "build",
+        "src",
+    },
+}
