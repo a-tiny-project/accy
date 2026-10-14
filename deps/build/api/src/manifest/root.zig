@@ -1,0 +1,15 @@
+pub const model = @import("model.zig");
+const registration = @import("register.zig");
+pub const File = registration.File;
+pub const Manifest = registration.Manifest;
+pub const Generator = registration.Generator;
+pub const source = @import("source.zig");
+pub const options = @import("options.zig");
+pub const paths = @import("paths.zig");
+pub const graph = @import("graph.zig");
+pub const native = @import("native.zig");
+pub const foreign = @import("foreign.zig");
+pub const attachment = @import("attachment.zig");
+pub const binding = @import("binding/root.zig");
+pub const linked = @import("linked.zig");
+pub const assembly = @import("assembly.zig");

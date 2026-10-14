@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 350" role="img" aria-labelledby="t d">
+<title id="t">Names decide how arrays combine: a missing axis repeats, a new name forms a grid, and sum removes the axis it names</title>
+<desc id="d">Left, one guess: frequency has no axes and time has sixteen elements along point, so the squared differences between predictions and samples form one row of sixteen, and sum along point leaves one mismatch. Right, eight guesses: frequency has eight elements along guess, so the squared differences form a grid of eight rows by sixteen points, and sum along point leaves eight mismatches, one per guess. Bottom: time has sixteen elements along point and sample has fifteen, marked in red, so define stops with error.AxisExtentMismatch.</desc>
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="head" d="M0,1 L10,5 L0,9 z"/></marker></defs>
+<style>
+.h{font:15px 'Century Supra','Century Schoolbook','New Century Schoolbook',Georgia,serif;fill:#1a1714}
+.t{font:14px 'Century Supra','Century Schoolbook','New Century Schoolbook',Georgia,serif;fill:#564e44}
+.ti{font:italic 14px 'Century Supra','Century Schoolbook','New Century Schoolbook',Georgia,serif;fill:#564e44}
+.c{font:14px ui-monospace,'SF Mono',Menlo,Consolas,monospace;fill:#1a1714}
+.acc{fill:#d2371f}
+.cell{fill:#ece8dd;stroke:#564e44;stroke-width:0.8}
+.in{fill:#f4f1ea;stroke:#564e44;stroke-width:0.8}
+.bad{fill:#f6e3dc;stroke:#d2371f;stroke-width:1.2}
+.line{fill:none;stroke:#564e44;stroke-width:1.2} .head{fill:#564e44}
+.rule{stroke:rgba(26,23,20,0.3);stroke-width:1}
+@media (prefers-color-scheme: dark){
+.h,.c{fill:#ece3d2} .t,.ti{fill:#b0a692} .acc{fill:#fe5a44}
+.cell{fill:#2a261e;stroke:#b0a692} .in{fill:#1e1b15;stroke:#b0a692}
+.bad{fill:#3a1f19;stroke:#fe5a44}
+.line{stroke:#b0a692} .head{fill:#b0a692}
+.rule{stroke:rgba(236,227,210,0.28)}
+}
+</style>
+<text class="h" x="0" y="18">One guess</text>
+<text class="c" x="22" y="52">time</text>
+<text class="t" x="182" y="52" text-anchor="end">point 16</text>
+<rect class="in" x="22.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="32.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="42.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="52.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="62.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="72.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="82.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="92.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="102.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="112.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="122.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="132.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="142.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="152.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="162.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="172.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="0.5" y="78.5" width="10" height="10"/>
+<text class="t" x="102.0" y="112" text-anchor="middle">squared differences</text>
+<text class="c" x="0" y="134">frequency<tspan class="t">, no axes</tspan></text>
+<rect class="cell" x="22.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="32.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="42.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="52.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="62.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="72.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="82.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="92.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="102.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="112.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="122.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="132.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="142.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="152.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="162.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="172.5" y="78.5" width="10" height="10"/>
+<path class="line" d="M194,83.0 L286,83.0" marker-end="url(#h)"/>
+<text class="c" x="240" y="75.0" text-anchor="middle">sum(.point)</text>
+<rect class="cell" x="292.5" y="78.5" width="10" height="10"/>
+<text class="t" x="297.0" y="112" text-anchor="middle">one mismatch</text>
+<text class="h" x="370" y="18">Eight guesses</text>
+<text class="c" x="392" y="52">time</text>
+<text class="t" x="552" y="52" text-anchor="end">point 16</text>
+<rect class="in" x="392.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="402.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="412.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="422.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="432.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="442.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="452.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="462.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="472.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="482.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="492.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="502.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="512.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="522.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="532.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="542.5" y="60.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="78.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="88.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="98.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="108.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="118.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="128.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="138.5" width="10" height="10"/>
+<rect class="in" x="370.5" y="148.5" width="10" height="10"/>
+<text class="t" x="472.0" y="182" text-anchor="middle">squared differences</text>
+<text class="c" x="370" y="204">frequency<tspan class="t">, guess 8</tspan></text>
+<rect class="cell" x="392.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="392.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="402.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="412.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="422.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="432.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="442.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="452.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="462.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="472.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="482.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="492.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="502.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="512.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="522.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="532.5" y="148.5" width="10" height="10"/>
+<rect class="cell" x="542.5" y="148.5" width="10" height="10"/>
+<path class="line" d="M564,118.0 L656,118.0" marker-end="url(#h)"/>
+<text class="c" x="610" y="110.0" text-anchor="middle">sum(.point)</text>
+<rect class="cell" x="662.5" y="78.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="88.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="98.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="108.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="118.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="128.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="138.5" width="10" height="10"/>
+<rect class="cell" x="662.5" y="148.5" width="10" height="10"/>
+<text class="t" x="667.0" y="182" text-anchor="middle">8 mismatches</text>
+<line class="rule" x1="0" y1="228" x2="720" y2="228"/>
+<text class="h" x="0" y="254">Same name, different lengths</text>
+<text class="c" x="0" y="289">time</text>
+<rect class="in" x="70.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="80.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="90.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="100.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="110.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="120.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="130.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="140.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="150.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="160.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="170.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="180.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="190.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="200.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="210.5" y="278.5" width="10" height="10"/>
+<rect class="in" x="220.5" y="278.5" width="10" height="10"/>
+<text class="t" x="240" y="289">point 16</text>
+<text class="c" x="0" y="317">sample</text>
+<rect class="bad" x="70.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="80.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="90.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="100.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="110.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="120.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="130.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="140.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="150.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="160.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="170.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="180.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="190.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="200.5" y="306.5" width="10" height="10"/>
+<rect class="bad" x="210.5" y="306.5" width="10" height="10"/>
+<text class="t acc" x="240" y="317">point 15</text>
+<text class="ti" x="370" y="289">define stops with</text>
+<text class="c acc" x="370" y="311">error.AxisExtentMismatch</text>
+</svg>

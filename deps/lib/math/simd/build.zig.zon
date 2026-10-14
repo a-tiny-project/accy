@@ -1,0 +1,19 @@
+.{
+    .name = .simd,
+    .version = "26.7.0",
+    .fingerprint = 0x8544906ac5eba808,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .alloc_phase = .{ .path = "../../base/alloc/phase" },
+        .build_api = .{ .path = "../../../build/api" },
+        .sys = .{ .path = "../../base/sys" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "build",
+        "LICENSE",
+        "logo.svg",
+        "src",
+    },
+}

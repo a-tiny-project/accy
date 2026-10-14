@@ -1,0 +1,10 @@
+host_reserve_mib=4096
+default_memory_claim_mib=3584
+fallback_memory_claim_mib=5120
+toolchain_memory_claim_mib=6144
+tree_overhead_reserve_mib=256
+test_step_memory_claim_mib=4096
+compile_step_memory_claim_mib=1536
+build_cpu_claim=2
+zig_package_memory_claim_mib=8192
+zig_package_cpu_claim=4

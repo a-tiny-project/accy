@@ -1,0 +1,24 @@
+pub const codegen = @import("codegen.zig");
+pub const catalog = @import("catalog.zig");
+pub const dialect = @import("dialect.zig");
+pub const emit = @import("emit.zig");
+pub const gpu = @import("gpu.zig");
+pub const module = @import("module.zig");
+pub const memory = @import("memory.zig");
+pub const plan = @import("plan.zig");
+pub const scalar = @import("scalar.zig");
+pub const spec = @import("spec.zig");
+pub const stage = @import("stage.zig");
+pub const validation = @import("validation.zig");
+pub const ops = @import("ops.zig");
+
+pub const SpirvOp = ops.SpirvOp;
+pub const SpirvCodegen = codegen.SpirvCodegen;
+pub const SpirvCodegenError = codegen.SpirvCodegenError;
+pub const FloatControls = codegen.FloatControls;
+pub const Emitter = emit.Emitter;
+pub const emitPlanWords = plan.emitPlanWords;
+pub const Builder = module.Builder;
+pub const Version = module.Version;
+pub const Header = module.Header;
+pub const Section = module.Section;
